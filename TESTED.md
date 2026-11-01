@@ -1,4 +1,4 @@
-# Mac checks · 1 November 2026
+# Mac checks · version 1.2 · 1 November 2026
 
 This separate contract-creation app was checked on the Apple M1 Mac using fictional employee details. The AI-assisted application and its repository were kept separate.
 
@@ -11,6 +11,7 @@ This separate contract-creation app was checked on the Apple M1 Mac using fictio
 - Refugee and custom bilingual document types were generated and stored. Red borders and inline messages identified missing fields and an invalid salary. Completed contracts reopened saved details, generated another Word version without altering the first, and stored an externally edited Word file byte for byte. Advanced controls were accessible from small More menus.
 - The standalone Mac application passed the same fictional browser/import/export/template workflow. It runs without an AI model or engine and has a separate browser-session cookie.
 - The macOS outbound restriction denied an external dummy connection while allowing a loopback connection.
+- Arabic and English interface checks covered the top-bar language switch, Arabic first-use default, locally bundled Noto Sans Arabic fonts, mirrored desktop/mobile layout, translated validation, saved language after reload, and unchanged unsaved values/confirmations. Spreadsheet row/search settings, custom-type modal text, template mapping inputs and preview pages survived switching. Word generation also completed from the Arabic interface. No external translation/font requests occurred.
 - Desktop and narrow-width browser checks found no JavaScript errors, failed requests, external requests or horizontal page overflow. NMO colors were retained.
 - Startup checks covered the fixed address, reuse with missing/stale address files, rejecting a different workspace, and keeping a replacement instance’s address during shutdown. Reopening the packaged app reused the same running process.
 - Invalid origins, old application cookies and mutations during a running workspace operation were refused. Generation required field confirmation and separate acknowledgement for expired identity details.

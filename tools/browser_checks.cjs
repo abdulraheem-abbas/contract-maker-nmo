@@ -7,10 +7,10 @@ assert.equal(new URL(fixture.base).hostname,'127.0.0.1');
 (async()=>{
  const browser=await chromium.launch({headless:true,executablePath:process.env.CONTRACTS_BROWSER||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
  try{
-  const context=await browser.newContext({baseURL:fixture.base,viewport:{width:1440,height:1050}});
+  const context=await browser.newContext({baseURL:fixture.base,viewport:{width:1440,height:1050},storageState:{cookies:[],origins:[{origin:fixture.base,localStorage:[{name:'nmo-contract-maker-language',value:'en'}]}]}});
   const external=[],errors=[],failed=[];
   await context.route('**/*',route=>{const url=route.request().url();if(!url.startsWith(fixture.base+'/')&&!url.startsWith('data:')){external.push(url);return route.abort();}return route.continue();});
-  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('response',r=>{if(r.status()>=400)failed.push({status:r.status(),url:r.url()});});
+  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.stack||e.message));page.on('response',r=>{if(r.status()>=400)failed.push({status:r.status(),url:r.url()});});
   await page.goto(fixture.base);await page.waitForFunction(()=>document.querySelector('#today').textContent!=='YOUR PRIVATE WORKSPACE');
   assert.equal(await page.locator('nav [data-nav="templates"],nav [data-nav="setup"],[data-new="spreadsheet"],.read-ai,#engine-pill').count(),0);assert.equal(await page.locator('#more-spreadsheet').isVisible(),false);
   assert.equal(await page.locator('.sidebar').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(52, 58, 61)');
@@ -64,8 +64,9 @@ assert.equal(new URL(fixture.base).hostname,'127.0.0.1');
   await page.screenshot({path:path.join(root,'test-results/mobile.png'),fullPage:true});
   const width=await page.evaluate(()=>({body:document.documentElement.scrollWidth,viewport:innerWidth}));assert(width.body<=width.viewport);
   await page.locator('#main-tools>summary').click();await page.locator('#main-tools [data-nav="setup"]').click();await page.getByRole('heading',{name:'About & storage',exact:true}).waitFor();
+  const languages=await require('./browser_language_checks.cjs')({browser,context,page,fixture,root});
   assert.deepEqual(errors,[]);assert.deepEqual(external,[]);assert.deepEqual(failed,[]);
-  const report={manual_entry:'Word only; no PDF or JSON downloads',red_field_errors:'missing and invalid fields highlighted',document_types:'refugee and custom bilingual type verified',completed_contracts:'reopen and regenerate, preserving earlier Word versions',uploaded_word:'stored without changing bytes',spreadsheet_import:'explicit row 3; leading zeros preserved; values unconfirmed until checked',template_changes:'draft, preview, activation and restore passed',arabic_and_english:'RTL/LTR inputs verified',derived_values:'weekday and inclusive period verified',nmo_theme:'verified',mobile_overflow:false,ai_controls:false,browser_errors:errors,external_requests:external};
+  const report={languages,manual_entry:'Word only; no PDF or JSON downloads',red_field_errors:'missing and invalid fields highlighted',document_types:'refugee and custom bilingual type verified',completed_contracts:'reopen and regenerate, preserving earlier Word versions',uploaded_word:'stored without changing bytes',spreadsheet_import:'explicit row 3; leading zeros preserved; values unconfirmed until checked',template_changes:'draft, preview, activation and restore passed',arabic_and_english:'RTL/LTR inputs verified',derived_values:'weekday and inclusive period verified',nmo_theme:'verified',mobile_overflow:false,ai_controls:false,browser_errors:errors,external_requests:external};
   fs.writeFileSync(path.join(root,'test-results/browser-check.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report));
  }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

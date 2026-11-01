@@ -164,7 +164,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_common_headers('text/html; charset=utf-8',length=len(content))
                 self.send_header('Set-Cookie',f'nmo_contract_maker={SESSION}; HttpOnly; SameSite=Strict; Path=/')
                 self.end_headers();self.wfile.write(content);return
-            if route in {'/app.js','/app.css','/icon.svg','/report.css'}:
+            if route in {'/app.js','/app.css','/icon.svg','/report.css','/i18n.js','/language.css','/fonts/NotoSansArabic-Regular.ttf','/fonts/NotoSansArabic-Bold.ttf'}:
                 p=RESOURCES/'web'/route[1:]
                 return self.binary(p.read_bytes(),mimetypes.guess_type(str(p))[0] or 'application/octet-stream')
             if route=='/favicon.ico':

@@ -1,0 +1,97 @@
+/* Bundled OFL fonts: no font service or network request is needed. */
+@font-face{font-family:"NMO Arabic";src:url('/fonts/NotoSansArabic-Regular.ttf') format('truetype');font-style:normal;font-weight:400 599;font-display:swap}
+@font-face{font-family:"NMO Arabic";src:url('/fonts/NotoSansArabic-Bold.ttf') format('truetype');font-style:normal;font-weight:600 900;font-display:swap}
+.language-switch{border:1px solid #b7d5d9;border-radius:6px;padding:7px 12px;color:var(--accent);background:#fff;font-size:12px;font-weight:600;min-width:68px;line-height:1.6}
+.language-switch:hover{background:#e3f3f5;border-color:var(--accent)}
+.language-switch[lang=ar],:lang(ar){font-family:"NMO Arabic",Tahoma,Arial,sans-serif}
+/* Physical positioning is mirrored; grids and flex rows inherit document direction. */
+[dir=rtl] .sidebar{inset:0 0 0 auto}
+[dir=rtl] .app-shell{margin-left:0;margin-right:237px}
+[dir=rtl] .brand{padding-left:0;padding-right:6px;letter-spacing:0;font-size:17px}
+[dir=rtl] .brand img{flex-shrink:0}
+[dir=rtl] .brand strong{font-size:16px;line-height:2}
+[dir=rtl] .nav,[dir=rtl] .action-card,[dir=rtl] .job-row,[dir=rtl] .source-file,[dir=rtl] .template-actions .inline-link,[dir=rtl] .sheet-source-link,[dir=rtl] .more-menu-items button,[dir=rtl] .sheet-table th{ text-align:right }
+[dir=rtl] .nav.active{box-shadow:inset -3px 0 var(--nmo-turquoise)}
+[dir=rtl] .more-menu-items{right:auto;left:0}
+[dir=rtl] .close-dialog{right:auto;left:17px}
+[dir=rtl] .field-row.confirmed{border-left:0;border-right:3px solid var(--nmo-turquoise);padding-left:0;padding-right:15px}
+[dir=rtl] .field-row.invalid{border-left:0;border-right:3px solid #b42318;padding-left:0;padding-right:15px}
+[dir=rtl] .form-error-summary{border-left-width:1px;border-right:4px solid #b42318}
+[dir=rtl] .form-error-summary .inline-link{margin-left:0;margin-right:5px}
+[dir=rtl] .required-star{margin-left:0;margin-right:4px}
+[dir=rtl] .template-preview-controls a{margin-left:0;margin-right:auto}
+[dir=rtl] .template-card>p[lang=ar]{text-align:right}
+[dir=rtl] .toast{left:30px;right:auto}
+[dir=rtl] .hero-mark{margin:13px 0 0 67px;transform:scaleX(-1) rotate(7deg)}
+[dir=rtl] .hero-mark .paper-check{transform:scaleX(-1) rotate(7deg)}
+/* Arabic uses natural spacing, clear type and generous line height. */
+html[lang=ar] body{font-family:"NMO Arabic",Tahoma,Arial,sans-serif;font-size:14px;line-height:1.9}
+html[lang=ar] h1,html[lang=ar] h2,html[lang=ar] h3,html[lang=ar] .eyebrow,html[lang=ar] .workspace-label,html[lang=ar] .action-body strong,html[lang=ar] footer,html[lang=ar] .version{letter-spacing:0}
+html[lang=ar] h1{font-size:40px;font-weight:600;line-height:1.55;margin-top:12px;margin-bottom:14px}
+html[lang=ar] h2{font-size:19px;line-height:1.8;font-weight:600}
+html[lang=ar] h3{font-size:15px;line-height:1.8}
+html[lang=ar] .eyebrow{font-size:11px;font-weight:600;line-height:1.9}
+html[lang=ar] .workspace-label{font-size:11px;margin-top:43px}
+html[lang=ar] .nav{font-size:13px;line-height:1.9;padding:12px}
+html[lang=ar] .sidebar-bottom strong{font-size:12px}
+html[lang=ar] .sidebar-bottom p{font-size:11px;line-height:2}
+html[lang=ar] .version{font-size:10px}
+html[lang=ar] .lead{font-size:14px;line-height:2}
+html[lang=ar] .topbar{font-size:12px}
+html[lang=ar] .topbar-right{gap:15px}
+html[lang=ar] .privacy-badge{font-size:11px}
+html[lang=ar] .action-body strong{font-size:18px;font-weight:600}
+html[lang=ar] .action-body>span{font-size:12px;line-height:2}
+html[lang=ar] .action-body b{font-size:12px}
+html[lang=ar] .subtle,html[lang=ar] .panel-heading p,html[lang=ar] .empty-state p,html[lang=ar] .source-card p,html[lang=ar] .archive-note{font-size:12px;line-height:2}
+html[lang=ar] .workflow-note{font-size:11px;line-height:2}
+[dir=rtl] .workflow-note i{transform:scaleX(-1)}
+html[lang=ar] .button{font-size:12px;line-height:1.7;font-weight:600;padding:10px 15px}
+html[lang=ar] .small{font-size:11px;padding:6px 10px}
+html[lang=ar] .back-link{font-size:12px}
+html[lang=ar] .job-heading h1{font-size:29px;line-height:1.8;letter-spacing:0}
+html[lang=ar] .tab{font-size:10px;gap:8px}
+html[lang=ar] .tab span{font-size:12px}
+html[lang=ar] .status-chip{font-size:10px;line-height:1.8}
+html[lang=ar] .row-title strong{font-size:13px}
+html[lang=ar] .row-title small{font-size:10px}
+html[lang=ar] .field-label label{font-size:12px;line-height:1.9}
+html[lang=ar] .field-label small{font:10px/1.8 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;display:inline-block;color:var(--muted)}
+html[lang=ar] .field-label .confirm-label{font-size:10px;white-space:nowrap}
+html[lang=ar] .field-input{font-size:14px;min-height:46px}
+input[dir=ltr]{direction:ltr;text-align:left;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;font-variant-numeric:tabular-nums}
+input[dir=rtl]{direction:rtl;text-align:right;font-family:"NMO Arabic",Tahoma,Arial,sans-serif}
+html[lang=ar] .field-origin,html[lang=ar] .evidence-link{font-size:10px;line-height:1.9}
+html[lang=ar] .field-error,html[lang=ar] .form-error,html[lang=ar] .form-error-summary{font-size:12px!important}
+html[lang=ar] .calculated-values h3{font-size:14px}
+html[lang=ar] .calculated-values span,html[lang=ar] .calculated-values p{font-size:12px;line-height:2}
+html[lang=ar] .calculated-values small{font-size:11px}
+html[lang=ar] .calculated-values [lang=en]{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;font-size:11px}
+html[lang=ar] .calculated-values strong{font-size:14px;font-weight:600}
+html[lang=ar] .viewer-empty,html[lang=ar] .viewer-controls{font-size:12px;line-height:2}
+html[lang=ar] .viewer-heading strong{font-size:13px}
+html[lang=ar] .finding h3,html[lang=ar] .finding p{font-size:13px;line-height:2}
+html[lang=ar] .completed-info h3{font-size:17px;line-height:1.8}
+html[lang=ar] .completed-info p,html[lang=ar] .completed-info small,html[lang=ar] .completed-actions .inline-link{font-size:11px;line-height:2}
+html[lang=ar] label,html[lang=ar] summary{font-size:12px;line-height:1.9}
+html[lang=ar] dialog h2{font-size:25px;line-height:1.8;letter-spacing:0}
+html[lang=ar] dialog p{font-size:13px;line-height:2}
+html[lang=ar] dialog input,html[lang=ar] dialog select{font-size:14px;min-height:44px}
+html[lang=ar] input[type=checkbox]{min-height:auto;flex-shrink:0}
+html[lang=ar] .template-help,html[lang=ar] .template-guide p,html[lang=ar] .rule p,html[lang=ar] .setup-card p,html[lang=ar] .privacy-detail p{font-size:12px;line-height:2}
+html[lang=ar] .token-list{direction:ltr;justify-content:flex-end}
+html[lang=ar] .token-list span{font-family:ui-monospace,monospace}
+html[lang=ar] .template-paragraph{font-family:"NMO Arabic",Arial,sans-serif}
+html[lang=ar] .sheet-table{font-size:12px}
+html[lang=ar] .sheet-table th{font-size:11px}
+html[lang=ar] .sheet-map{font-size:12px}
+html[lang=ar] .sheet-cell-value{font-family:"NMO Arabic",Arial,sans-serif}
+html[lang=ar] .sheet-table td:first-child{direction:ltr;font-family:ui-monospace,monospace}
+html[lang=ar] .more-menu-items button{font-size:13px;line-height:1.8}
+html[lang=ar] footer{font-size:10px;line-height:2}
+html[lang=ar] footer span{letter-spacing:0}
+@media(min-width:1500px){html[lang=ar] h1{font-size:45px}[dir=rtl] .hero-mark{margin-left:130px}}
+@media(max-width:1100px){[dir=rtl] .app-shell{margin-right:205px}[dir=rtl] .hero-mark{margin-left:15px}.topbar-right{gap:10px}html[lang=ar] .topbar-right{gap:10px}html[lang=ar] .privacy-badge{display:none}}
+@media(max-width:800px){[dir=rtl] .app-shell{margin-right:72px}[dir=rtl] .brand{padding:0}html[lang=ar] .nav{font-size:0;padding:14px 8px}html[lang=ar] h1{font-size:31px}html[lang=ar] .job-heading h1{font-size:25px}html[lang=ar] .lead br{display:none}html[lang=ar] .topbar-right{gap:7px}html[lang=ar] .local-mode-badge{display:none}.language-switch{padding:6px 10px;min-width:65px}.privacy-badge{display:none}.topbar-right{justify-content:flex-end}.language-switch{margin-inline-end:auto}[dir=rtl] .toast{left:87px;right:15px}html[lang=ar] .panel-heading h2{font-size:17px}html[lang=ar] .page-heading{min-height:245px}html[lang=ar] .action-card{padding:22px 19px}html[lang=ar] .action-body strong{font-size:17px}html[lang=ar] .button{white-space:normal}html[lang=ar] .field-label{gap:8px}html[lang=ar] .field-label .confirm-label{font-size:9px}html[lang=ar] .tabs{gap:16px}html[lang=ar] .tab span{font-size:11px}html[lang=ar] footer{gap:10px;flex-wrap:wrap}.details-layout>*{min-width:0}html[lang=ar] dialog h2{font-size:23px}html[lang=ar] dialog{max-width:calc(100vw - 24px)}html[lang=ar] .sheet-table{min-width:750px}}
+
+[dir=rtl] .action-body b>span,[dir=rtl] #main-action>span,[dir=rtl] .job-row>span:last-child{display:inline-block;transform:scaleX(-1)}

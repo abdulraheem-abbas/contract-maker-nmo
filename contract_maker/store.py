@@ -38,7 +38,7 @@ def jobs():
         job=json.loads(row['content']);words=[n for n in job.get('outputs',[]) if n.lower().endswith('.docx')]
         snapshot=job.get('last_generation',{}).get('confirmed_fields',{})
         changed=bool(words and snapshot and any(str(field.get('value',''))!=str(snapshot.get(key,{}).get('value','')) for key,field in job.get('fields',{}).items()))
-        result.append({'id':row['id'],'title':row['title'],'exported_title':job.get('last_exported_title') or snapshot.get('name_en',{}).get('value') or snapshot.get('name_ar',{}).get('value') or row['title'],'has_changes':changed,'updated':row['updated'],'kind':job.get('fields',{}).get('contract_type',{}).get('value','employment'),'word_count':len(words),'latest_word':words[-1] if words else None,'last_exported':job.get('last_exported'),'archive_only':job.get('archive_only',False)})
+        result.append({'id':row['id'],'title':row['title'],'exported_title':job.get('last_exported_title') or snapshot.get('name_en',{}).get('value') or snapshot.get('name_ar',{}).get('value') or row['title'],'has_changes':changed,'updated':row['updated'],'kind':job.get('fields',{}).get('contract_type',{}).get('value','employment'),'word_count':len(words),'latest_word':words[-1] if words else None,'last_exported':job.get('last_exported'),'archive_only':job.get('archive_only',False),'is_untitled':not job.get('archive_only') and not any(job.get('fields',{}).get(k,{}).get('value') for k in ['name_ar','name_en'])})
     return result
 
 def completed():

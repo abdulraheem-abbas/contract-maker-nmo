@@ -1,6 +1,6 @@
 # NMO Contract Maker
 
-A local website for creating Arabic and English employee contracts without AI. Enter the details yourself or import selected columns from a spreadsheet, confirm the fields, and export Word documents. The interface uses NMO turquoise and charcoal.
+A local website for creating Arabic and English employee contracts without AI. Enter the details yourself or import selected columns from a spreadsheet, confirm the fields, and export Word documents. The interface uses NMO turquoise and charcoal, with a complete Arabic/English language switch.
 
 This is a separate application from the AI-assisted Contract-Maker project. It has its own source, application name, browser session, workspace and history. It contains no AI engine, language model, OCR or existing-contract review feature.
 
@@ -11,6 +11,12 @@ This is a separate application from the AI-assisted Contract-Maker project. It h
 Double-click **NMO Contract Maker.app** or **Start Contract Maker.command**. The interface opens at **http://127.0.0.1:8770/** on this computer. Normal launches reuse this address and an existing instance; a stale address file does not force another port. Keep the app, `data` and `runtime` folders together. No AI download, internet connection or account is needed to create contracts.
 
 If you open `web/index.html` directly, use the shown app link after starting **NMO Contract Maker.app**. The source HTML file alone cannot run the local application.
+
+## Interface language
+
+Use **English / عربي** in the top bar. First use opens in Arabic; the choice is remembered in this browser on this local address. Arabic uses a complete right-to-left layout, translated controls and validation messages, and bundled Noto Sans Arabic fonts. English uses left-to-right layout. Font files and their OFL license are included under `web/fonts`; no online font or translation service is used.
+
+Switching languages preserves unsaved form values, confirmations, spreadsheet selection and template mapping entries. English text fields, document numbers and dates stay left to right; Arabic text fields stay right to left. Language switching affects the interface only: employee values, evidence, private templates and existing bilingual Word files are not translated or modified.
 
 ## Create a contract
 
@@ -70,7 +76,7 @@ python3 -m venv .venv
 
 Dependencies are installed as a software-setup step. Normal use requires no internet. Word generation does not require LibreOffice. Optional page previews for templates and Word references use locally installed LibreOffice or the prepared `runtime/office` directory. No OCR or model software is needed. Load your private Word templates using **Templates & rules**; they are not included in GitHub.
 
-Run `.venv/bin/python -m pytest -q tests` for automated checks. Run `.venv/bin/python tools/check_app.py` for the fictional browser/create/export workflow in a separate temporary workspace. This also exercises optional template previews and needs LibreOffice, local Node.js, Playwright and Chromium; `CONTRACTS_BROWSER` selects the browser executable. The three optional private-template tests skip on a clean source clone.
+Run `.venv/bin/python -m pytest -q tests` for automated checks and `node tools/check_language.cjs` for UI translation invariants. Run `.venv/bin/python tools/check_app.py` for the fictional browser/create/export workflow in a separate temporary workspace. This also exercises optional template previews and needs LibreOffice, local Node.js, Playwright and Chromium; `CONTRACTS_BROWSER` selects the browser executable. The three optional private-template tests skip on a clean source clone.
 
 Build the Mac app with `.venv/bin/python tools/build_mac.py`, then test the packaged app using `.venv/bin/python tools/check_app.py --app`. Rebuild after source edits. A Windows package and verified Windows outbound restrictions remain separate work; the Mac app is not a Windows executable.
 
