@@ -245,9 +245,14 @@ def row_import(sheet, row_number, mappings, contract_type):
         if key == 'contract_type' and value != contract_type:
             raise ValueError('The selected contract type differs from this spreadsheet row. Choose the correct contract type first.')
         if key in {'gender', 'identity_type'}:
+            from .documents import catalog
             translations = {'ذكر': 'male', 'أنثى': 'female', 'انثى': 'female', 'جواز سفر': 'passport', 'بطاقة شخصية': 'id_card', 'الرقم الوطني': 'national_id'}
+            if key=='identity_type':
+                for document in catalog():
+                    translations[document['ar']]=document['id'];translations[document['en'].casefold()]=document['id']
+                value=translations.get(value,translations.get(value.casefold(),value))
             value = translations.get(value, value.casefold())
-            allowed = {'male', 'female'} if key == 'gender' else {'passport', 'id_card', 'national_id'}
+            allowed = {'male', 'female'} if key == 'gender' else {d['id'] for d in catalog()}
             if value not in allowed:
                 warnings.append({'field': key, 'message': 'Choose a supported value for ' + key + ' manually.'})
                 continue

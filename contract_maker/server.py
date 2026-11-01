@@ -21,11 +21,11 @@ from .checks import check_fields,calculations
 from .spreadsheets import read_workbook,row_import,suggested_mapping,column_index
 from . import store
 from .readers import read_file,page_image
-from .office import office_binary,to_pdf
 from .templates import registry,generate,template_requirements
 from . import __version__
 from .privacy import install_network_guard
 from . import template_manager
+from .documents import catalog,add_type,document_type
 
 TASKS={}
 TASK_LOCK=threading.Lock()
@@ -46,6 +46,8 @@ def full_job(job_id):
     job=store.get_job(job_id)
     job['source_details']=[public_source(store.get_source(s)) for s in job.get('sources',[])]
     job['calculations']=calculations(job['fields'])
+    job['outputs']=[name for name in job.get('outputs',[]) if name.lower().endswith('.docx')]
+    job['validation']=check_fields(job['fields'],registry().get(job['fields']['contract_type']['value'],{}),rules())
     return job
 
 def sheet_source(job_id,source_id):
@@ -98,7 +100,19 @@ def save_input_fields(job,payload):
     if modified:
         job['findings']=[];job.pop('checked_at',None)
     store.save_job(job)
-    return {**job,'calculations':calculations(job['fields'])}
+    return job
+
+def store_word_revision(job,raw,source_name,origin):
+    revision=1+sum(n.lower().endswith('.docx') for n in job.get('outputs',[]))
+    stem=re.sub(r'[\\/:*?"<>|\x00-\x1f]','-',Path(source_name).stem).strip()[:110] or 'Contract'
+    name=f'{stem} - v{revision}.docx'
+    folder=DATA/'outputs'/job['id'];folder.mkdir(parents=True,exist_ok=True)
+    (folder/name).write_bytes(raw)
+    job['outputs'].append(name);job['last_exported']=store.now()
+    job['last_exported_title']=job['title']
+    job.setdefault('revisions',[]).append({'name':name,'number':revision,'created':job['last_exported'],'origin':origin,'sha256':hashlib.sha256(raw).hexdigest()})
+    job['last_word_origin']=origin
+    return name
 
 class AppServer(ThreadingHTTPServer):
     daemon_threads=True
@@ -159,8 +173,9 @@ class Handler(BaseHTTPRequestHandler):
             if not self.authenticated():
                 return self.respond({'error':'Open NMO Contract Maker in its own window first.'},403)
             if route=='/api/bootstrap':
-                return self.respond({'csrf':CSRF,'jobs':store.jobs(),'fields':FIELDS,'templates':{k:{**{a:b for a,b in v.items() if a in {'label','sha256','placeholders','ready','version','source_name','saved_at'}},'history_count':len(v.get('history',[])),'required_fields':sorted(template_requirements(v)|required_fields(k))} for k,v in registry().items()},'generation_only':True,'requires_models':False,'pdf_export':bool(office_binary()),'rules':rules(),'version':__version__})
+                return self.respond({'csrf':CSRF,'jobs':store.jobs(),'completed':store.completed(),'identity_types':catalog(),'fields':FIELDS,'templates':{k:{**{a:b for a,b in v.items() if a in {'label','sha256','placeholders','ready','version','source_name','saved_at'}},'history_count':len(v.get('history',[])),'required_fields':sorted(template_requirements(v)|required_fields(k))} for k,v in registry().items()},'generation_only':True,'requires_models':False,'word_only':True,'rules':rules(),'version':__version__})
             if route=='/api/job':return self.respond(full_job(arg('id')))
+            if route=='/api/completed':return self.respond(store.completed())
             if route=='/api/sheet':
                 job,source,sheets=sheet_source(arg('job'),arg('source'))
                 index=int(arg('sheet','0'))
@@ -188,14 +203,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond({'text':source['pages'][index]['text']})
             if route=='/api/file':
                 job=store.get_job(arg('job'));name=arg('name')
-                if name not in job.get('outputs',[]):raise ValueError('Output not found.')
+                if name not in job.get('outputs',[]) or not name.lower().endswith('.docx'):raise ValueError('Word output not found.')
                 p=DATA/'outputs'/job['id']/name
                 return self.binary(p.read_bytes(),mimetypes.guess_type(name)[0] or 'application/octet-stream',name if arg('download')=='1' else None)
             if route=='/api/bundle':
                 job=store.get_job(arg('job'));buffer=BytesIO()
                 with ZipFile(buffer,'w',ZIP_DEFLATED) as z:
                     for name in job.get('outputs',[]):
-                        z.write(DATA/'outputs'/job['id']/name,name)
+                        if name.lower().endswith('.docx'):z.write(DATA/'outputs'/job['id']/name,name)
                 return self.binary(buffer.getvalue(),'application/zip','Contract package.zip')
             if route=='/api/template-editor':
                 return self.respond(template_manager.describe(arg('kind'),arg('draft') or None))
@@ -228,7 +243,7 @@ class Handler(BaseHTTPRequestHandler):
             payload=json.loads(self.rfile.read(length))
             if not isinstance(payload,dict):raise ValueError('Invalid request.')
             route=urlparse(self.path).path
-            if payload.get('job') and route in {'/api/save','/api/import','/api/sheet-import','/api/check','/api/generate'}:
+            if payload.get('job') and route in {'/api/save','/api/import','/api/sheet-import','/api/check','/api/generate','/api/archive-word'}:
                 with TASK_LOCK:
                     if any(t.get('job')==payload['job'] and t['status']=='running' for t in TASKS.values()):
                         raise ValueError('Wait for this workspace operation to finish before changing its details.')
@@ -241,7 +256,32 @@ class Handler(BaseHTTPRequestHandler):
                 store.save_job(job);store.audit(job['id'],'workspace_created',{'mode':job['mode'],'kind':kind})
                 return self.respond(job)
             if route=='/api/save':
-                return self.respond(save_input_fields(store.get_job(payload['job']),payload))
+                job=save_input_fields(store.get_job(payload['job']),payload)
+                return self.respond(full_job(job['id']))
+            if route=='/api/identity-type':
+                entry=add_type(payload.get('ar',''),payload.get('en',''),payload.get('verb_ar','صادرة'),payload.get('article_en','a'))
+                return self.respond({'identity_type':entry,'identity_types':catalog()})
+            if route=='/api/archive-word':
+                name=Path(str(payload.get('name','')).replace('\\','/')).name
+                if Path(name).suffix.lower()!='.docx':raise ValueError('Choose a Word .docx contract.')
+                raw=base64.b64decode(payload['data'],validate=True)
+                if not raw or len(raw)>25*1024*1024:raise ValueError('Choose a Word file up to 25 MB.')
+                from .readers import checked_zip
+                from .templates import parse
+                try:
+                    with checked_zip(BytesIO(raw)) as package:parse(package.read('word/document.xml'))
+                except Exception as exc:raise ValueError('This file could not be read as a Word contract.') from exc
+                if payload.get('job'):
+                    job=store.get_job(payload['job'])
+                else:
+                    kind=payload.get('kind','employment')
+                    if kind not in {'employment','service','extension'}:raise ValueError('Choose a contract type.')
+                    values=empty_fields();values['contract_type'].update(value=kind,confirmed=True,origin='chosen by you')
+                    title=str(payload.get('title') or Path(name).stem).strip()[:200]
+                    job={'id':uuid.uuid4().hex,'title':title,'mode':'create','archive_only':True,'fields':values,'sources':[],'findings':[],'outputs':[],'created':store.now()}
+                filename=store_word_revision(job,raw,name,'uploaded_word')
+                store.save_job(job);store.audit(job['id'],'word_revision_uploaded',{'file':filename,'sha256':hashlib.sha256(raw).hexdigest()})
+                return self.respond({'job':full_job(job['id'])})
             if route=='/api/import':
                 job_id=payload['job'];store.get_job(job_id)
                 name=Path(str(payload['name']).replace('\\','/')).name
@@ -313,7 +353,7 @@ class Handler(BaseHTTPRequestHandler):
                     if not template or not Path(template).exists():raise ValueError('Prepare this template in Templates before generating a contract.')
                     if hashlib.sha256(Path(template).read_bytes()).hexdigest()!=entry['sha256']:raise ValueError('The template has changed outside the app. Re-import it before generation.')
                     # Protect previous output revisions instead of overwriting them.
-                    revision=1+sum(name.endswith('.docx') for name in job['outputs'])
+                    revision=1+sum(name.lower().endswith('.docx') for name in job['outputs'])
                     name=job['fields']['name_ar']['value'] or job['fields']['name_en']['value']
                     name=re.sub(r'[\\/:*?"<>|\x00-\x1f]','-',name).strip()[:120]
                     prefix={'employment':'عقد عمل','service':'عقد خدمة','extension':'خطاب تمديد'}[kind]
@@ -323,26 +363,19 @@ class Handler(BaseHTTPRequestHandler):
                     progress('Filling the approved Word template')
                     verification=generate(template,job['fields'],docx)
                     verification['template']={k:v for k,v in entry.items() if k in {'label','sha256','version','source_name','saved_at'}}
-                    outputs=[docx.name];pdf_error=None
-                    try:
-                        progress('Creating the PDF locally and checking its pages')
-                        pdf=to_pdf(docx,out);outputs.append(pdf.name)
-                        pages=read_file(pdf)
-                        low_text=[p['number'] for p in pages if len(p['text'].strip())<12]
-                        verification.update(pdf_pages=len(pages),pages_to_inspect=low_text)
-                    except Exception:
-                        pdf_error='PDF export did not complete; your Word file was saved.'
                     verification['sources']=[{'name':s['name'],'role':s['role'],'sha256':s['sha256']} for s in [store.get_source(i) for i in job['sources']]]
                     verification['confirmed_fields']=job['fields']
+                    verification['identity_type']=document_type(job['fields']['identity_type']['value']) if job['fields']['identity_type']['value'] else None
                     verification['spreadsheet_imports']=job.get('spreadsheet_imports',[])
                     verification['visual_review_required']=True
-                    verification['pdf_error']=pdf_error
-                    audit_name=stem+' - evidence.json'
-                    (out/audit_name).write_text(json.dumps(verification,ensure_ascii=False,indent=2));outputs.append(audit_name)
-                    job['outputs'].extend(outputs);job['findings']=warnings
+                    records=DATA/'records'/job_id;records.mkdir(parents=True,exist_ok=True)
+                    (records/f'revision-{revision}.json').write_text(json.dumps(verification,ensure_ascii=False,indent=2))
+                    job['outputs'].append(docx.name);job['findings']=warnings;job['archive_only']=False
+                    job['last_exported']=store.now();job['last_exported_title']=job['title'];job['last_word_origin']='generated'
+                    job.setdefault('revisions',[]).append({'name':docx.name,'number':revision,'created':job['last_exported'],'origin':'generated','sha256':verification['sha256']})
                     job['last_generation']=verification;store.save_job(job)
-                    store.audit(job_id,'contract_generated',{'revision':revision,'outputs':outputs,'verification':{k:v for k,v in verification.items() if k not in {'confirmed_fields','sources'}}})
-                    return {'job':job_id,'pdf_error':pdf_error}
+                    store.audit(job_id,'contract_generated',{'revision':revision,'outputs':[docx.name],'verification':{k:v for k,v in verification.items() if k not in {'confirmed_fields','sources','spreadsheet_imports'}}})
+                    return {'job':job_id}
                 return self.respond(run_task('Creating contract',generate_work,job_id))
             if route=='/api/shutdown':
                 if any(t['status']=='running' for t in TASKS.values()):raise ValueError('Wait for the current operation to finish before quitting.')

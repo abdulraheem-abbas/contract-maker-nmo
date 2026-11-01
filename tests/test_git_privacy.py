@@ -12,12 +12,12 @@ def test_private_files_are_ignored_but_source_is_versioned(tmp_path):
         'data/sources/employee.docx','data/templates/service/template.docx',
         'local/import_templates.py','Private Contracts.app/Contents/MacOS/Private Contracts',
         'Employee.PDF','passport.JPEG','Employee List.ODS','offer.DOCX','employee.TXT',
-        'employee.csv','rules.json','test-results/review.png','.env.local',
+        'employee.csv','rules.json','identity-types.json','test-results/review.png','.env.local',
         'node_modules/package/index.js','workspace.sqlite3','private-model.gguf',
     ]
     source=[
-        'private_contracts/server.py','web/app.js','web/icon.svg','README.md',
-        'DEVELOPMENT.md','tests/test_core.py','tools/setup_engine.py',
+        'contract_maker/server.py','web/app.js','web/icon.svg','README.md',
+        'contract_maker/documents.py','tests/test_contracts.py','tools/check_app.py',
         'requirements.txt','requirements-dev.txt',
     ]
     result=subprocess.run(['git','check-ignore','-z','--stdin'],cwd=tmp_path,input='\0'.join(private+source)+'\0',text=True,capture_output=True,check=True)

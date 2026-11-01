@@ -6,7 +6,8 @@ from .templates import validate_template
 
 def check_fields(fields, entry, rules, confirmed=False):
     findings = validate(fields, require_confirmation=confirmed)
-    findings.extend(validate_template(fields, entry, require_confirmation=confirmed))
+    existing_errors={finding['field'] for finding in findings if finding['level']=='error'}
+    findings.extend(finding for finding in validate_template(fields, entry, require_confirmation=confirmed) if finding['field'] not in existing_errors)
     name = arabic_name_key(fields.get('name_ar', {}).get('value', ''))
     for instruction in rules.get('job_title_overrides', []):
         if name and name == arabic_name_key(instruction.get('name_ar', '')):

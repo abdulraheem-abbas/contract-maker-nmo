@@ -1,7 +1,7 @@
 'use strict';
 const $ = (selector, root=document) => root.querySelector(selector);
 const $$ = (selector, root=document) => [...root.querySelectorAll(selector)];
-const state = {boot:null,job:null,tab:'documents',view:'workspace',mode:'create',source:null,page:1,task:null,role:'offer',saving:false,template:null,templateKind:null,templateBusy:false,sheet:null};
+const state = {boot:null,job:null,tab:'documents',view:'workspace',mode:'create',source:null,page:1,task:null,role:'offer',saving:false,template:null,templateKind:null,templateBusy:false,sheet:null,touched:new Set(),validateAll:false,archiveJob:null,archiveFile:null};
 const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let toastTimer,saveTimer;
 
@@ -16,27 +16,28 @@ async function api(path,body){
 function toast(message,error=false){clearTimeout(toastTimer);const el=$('#toast');el.textContent=message;el.classList.remove('hidden');el.classList.toggle('error',error);toastTimer=setTimeout(()=>el.classList.add('hidden'),6500);}
 function setView(view){
   state.view=view;
-  for(const name of ['workspace','job','templates','setup'])$(`#${name}-view`).classList.toggle('hidden',name!==view);
+  for(const name of ['workspace','job','completed','templates','setup'])$(`#${name}-view`).classList.toggle('hidden',name!==view);
   $$('.nav').forEach(n=>n.classList.toggle('active',n.dataset.nav===(view==='job'?'workspace':view)));
-  $('#breadcrumb').textContent=({workspace:'My workspace',job:'My workspace / Contract details',templates:'Templates & rules',setup:'Local setup'})[view];
+  $('#breadcrumb').textContent=({workspace:'My workspace',job:'My workspace / Contract details',completed:'Completed contracts',templates:'Templates & rules',setup:'About & storage'})[view];
   if(view==='workspace')renderJobs();
+  if(view==='completed')renderCompleted();
   if(view==='templates')renderTemplates();
   if(view==='setup')renderSetup();
   window.scrollTo({top:0,behavior:'instant'});
 }
 function dateLabel(value){try{return new Date(value).toLocaleDateString('en-GB',{day:'numeric',month:'short'});}catch{return '';}}
 function renderJobs(){
-  const jobs=state.boot.jobs;
+  const jobs=state.boot.jobs.filter(job=>!job.word_count||job.has_changes);
   $('#work-count').textContent=jobs.length?`${jobs.length} saved ${jobs.length===1?'workspace':'workspaces'}`:'Saved on this computer';
-  if(!jobs.length)return;
+  if(!jobs.length){$('#job-list').innerHTML='<div class="empty-state"><span>▤</span><h3>No unfinished drafts</h3><p>Start a new contract, or open Completed contracts to edit saved work.</p></div>';return;}
   $('#job-list').innerHTML=jobs.map(job=>`<button class="job-row" data-job="${job.id}"><span class="row-icon">▤</span><span class="row-title"><strong dir="auto">${escapeHTML(job.title)}</strong><small>Saved locally</small></span><span class="status-chip">Continue work</span><span class="row-date">${dateLabel(job.updated)}</span><span>↗</span></button>`).join('');
 }
 async function refreshBootstrap(){const csrf=state.boot?.csrf;state.boot=await api('/api/bootstrap');if(csrf&&csrf!==state.boot.csrf)toast('The local app restarted. Your saved work is safe.');}
 function newDialog(mode){state.mode=mode;$('#new-mode-label').textContent=mode==='spreadsheet'?'START FROM A SPREADSHEET':'NEW CONTRACT';$('#new-dialog').showModal();}
 async function openJob(id){
   if(state.task)throw new Error('Wait for the current step to finish.');
-  clearTimeout(saveTimer);state.job=await api('/api/job?id='+encodeURIComponent(id));state.source=state.job.sources[0]||null;state.page=1;
-  renderJob();setView('job');setTab('details');
+  clearTimeout(saveTimer);await refreshBootstrap();state.touched=new Set();state.validateAll=false;state.job=await api('/api/job?id='+encodeURIComponent(id));state.source=state.job.sources[0]||null;state.page=1;
+  renderJob();setView('job');setTab(state.job.archive_only?'outputs':'details');
 }
 function setTab(tab){
   state.tab=tab;
@@ -60,7 +61,10 @@ function updateCounts(){
 function renderJob(){
   const kind=fieldValue('contract_type');$('#job-kind').textContent=`${kind.toUpperCase()} CONTRACT`;
   $('#job-title').textContent=state.job.title;
-  $('#main-action').innerHTML='Create Word &amp; PDF <span>↗</span>';
+  $('#main-action').innerHTML='Create Word <span>↗</span>';
+  $('#main-action').classList.toggle('hidden',!!state.job.archive_only);$('#save-job').classList.toggle('hidden',!!state.job.archive_only);
+  $$('.tab').forEach(tab=>tab.classList.toggle('hidden',!!state.job.archive_only&&tab.dataset.tab!=='outputs'));
+  $('#saved-status').textContent=state.job.archive_only?'Word file saved as uploaded.':state.job.last_word_origin==='uploaded_word'?'Latest Word file was uploaded. These form details have not been updated from that file.':'Changes are saved locally.';
   renderSources();renderFields();renderFindings();renderOutputs();renderCalculations();updateCounts();
 }
 function renderSources(){
@@ -96,18 +100,19 @@ function renderFields(){
     const [_,english,arabic,type]=specs[key];const field=state.job.fields[key];
     let input;
     if(type==='select'){
-      const options=key==='contract_type'?[['employment','Employment contract · عقد عمل'],['service','Service contract · عقد خدمة'],['extension','Extension letter · خطاب تمديد']]:key==='gender'?[['','Not supplied'],['male','Male · ذكر'],['female','Female · أنثى']]:[['','Choose document type'],['id_card','ID card · بطاقة شخصية'],['national_id','ID with national number · الرقم الوطني'],['passport','Passport · جواز سفر']];
+      const options=key==='contract_type'?[['employment','Employment contract · عقد عمل'],['service','Service contract · عقد خدمة'],['extension','Extension letter · خطاب تمديد']]:key==='gender'?[['','Not supplied'],['male','Male · ذكر'],['female','Female · أنثى']]:[['','Choose document type'],...(state.boot.identity_types||[]).map(d=>[d.id,d.en+' · '+d.ar]),['__add__','＋ Add my own document type…']];
       input=`<select class="field-input" id="field-${key}" data-field="${key}">${options.map(([v,l])=>`<option value="${v}" ${field.value===v?'selected':''}>${escapeHTML(l)}</option>`).join('')}</select>`;
     }else input=`<input class="field-input" id="field-${key}" data-field="${key}" type="${type==='date'?'date':'text'}" dir="${key.endsWith('_ar')?'rtl':'ltr'}" value="${escapeHTML(field.value)}" autocomplete="off" ${key==='salary_usd'?'inputmode="decimal"':''}>`;
     const evidence=(field.evidence||[]).map((e,i)=>`<button class="evidence-link" data-evidence="${key}" data-index="${i}">↗ ${escapeHTML(e.source_name)} · p${e.page}${e.text_match===false?' · inspect image':''}</button>`).join('');
     const alternatives='';
-    return `<div class="field-row ${field.confirmed?'confirmed':''}" data-row="${key}"><div class="field-label"><label for="field-${key}"><span>${english}${required.includes(key)?'<b class="required-star">*</b>':''}</span><br><small lang="ar" dir="rtl">${arabic}</small></label><label class="confirm-label"><input type="checkbox" data-confirm="${key}" ${field.confirmed?'checked':''} ${!field.value?'disabled':''}>Checked</label></div>${input}<div class="field-evidence">${evidence}${alternatives}<span class="field-origin">${escapeHTML(field.note||field.origin||'Enter or read from a source')}</span></div></div>`;
+    return `<div class="field-row ${field.confirmed?'confirmed':''}" data-row="${key}"><div class="field-label"><label for="field-${key}"><span>${english}${required.includes(key)?'<b class="required-star">*</b>':''}</span><br><small lang="ar" dir="rtl">${arabic}</small></label><label class="confirm-label"><input type="checkbox" data-confirm="${key}" ${field.confirmed?'checked':''} ${!field.value?'disabled':''}>Checked</label></div>${input}<p class="field-error hidden" id="error-${key}" role="alert"></p><div class="field-evidence">${evidence}${alternatives}<span class="field-origin">${escapeHTML(field.note||field.origin||'Enter or read from a source')}</span></div></div>`;
   }).join('')}</section>`).join('');
+  paintFieldErrors();
 }
 function savePayload(){return {job:state.job.id,fields:state.job.fields};}
 async function saveJob(silent=true){
   if(!state.job||state.task)return;clearTimeout(saveTimer);
-  const saved=await api('/api/save',savePayload());state.job.title=saved.title;$('#job-title').textContent=saved.title;$('#saved-status').textContent='Saved on this computer';state.job.calculations=saved.calculations;renderCalculations();
+  const saved=await api('/api/save',savePayload());state.job.title=saved.title;$('#job-title').textContent=saved.title;$('#saved-status').textContent='Saved on this computer';state.job.calculations=saved.calculations;state.job.validation=saved.validation;paintFieldErrors();renderCalculations();
   if(!silent)toast('Your work is saved locally.');
 }
 function queueSave(){if(state.task)return;clearTimeout(saveTimer);$('#saved-status').textContent='Saving locally…';saveTimer=setTimeout(()=>saveJob().catch(handleError),800);}
@@ -129,7 +134,6 @@ async function watchTask(taskId){
       if(task.status==='error')throw new Error(task.message);
       if(task.status==='complete'||task.status==='cancelled'){
         if(task.result?.job){const oldTab=state.tab;state.job=await api('/api/job?id='+task.result.job);renderJob();setTab(oldTab);}
-        if(task.result?.pdf_error)toast(task.result.pdf_error,true);
         return task.result;
       }
       await new Promise(resolve=>setTimeout(resolve,1000));
@@ -156,26 +160,26 @@ function renderFindings(){
   const findings=state.job.findings;const counts={error:0,warning:0,pass:0};findings.forEach(f=>counts[f.level]=(counts[f.level]||0)+1);
   $('#findings-summary').innerHTML=findings.length?Object.entries(counts).map(([level,n])=>`<div class="summary-item"><strong>${n}</strong><span>${{error:'Needs correction',warning:'Needs your review',pass:'Matching checks'}[level]}</span></div>`).join(''):'';
   const labels=Object.fromEntries(state.boot.fields.map(s=>[s[0],s[1]]));
-  $('#findings-list').innerHTML=findings.length?[...findings].sort((a,b)=>['error','warning','pass'].indexOf(a.level)-['error','warning','pass'].indexOf(b.level)).map(f=>`<article class="finding ${f.level}"><span class="finding-icon">${{error:'!',warning:'!',pass:'✓'}[f.level]}</span><div><h3>${escapeHTML(labels[f.field]||f.field||'Document')}</h3><p>${escapeHTML(f.message)}</p>${f.expected?`<p dir="auto">Expected: ${escapeHTML(f.expected)}</p>`:''}</div><small>${f.page?'Page '+f.page:'Check field'}</small></article>`).join(''):`<div class="empty-state"><span>✓</span><h3>${state.job.checked_at?'No field issues found':'No checks run yet'}</h3><p>${state.job.checked_at?'Check and confirm the details, then create your files and inspect the PDF.':'Complete the employee details, then run the field checks.'}</p></div>`;
+  $('#findings-list').innerHTML=findings.length?[...findings].sort((a,b)=>['error','warning','pass'].indexOf(a.level)-['error','warning','pass'].indexOf(b.level)).map(f=>`<article class="finding ${f.level}"><span class="finding-icon">${{error:'!',warning:'!',pass:'✓'}[f.level]}</span><div><h3>${escapeHTML(labels[f.field]||f.field||'Document')}</h3><p>${escapeHTML(f.message)}</p>${f.expected?`<p dir="auto">Expected: ${escapeHTML(f.expected)}</p>`:''}</div><small>${f.page?'Page '+f.page:'Check field'}</small></article>`).join(''):`<div class="empty-state"><span>✓</span><h3>${state.job.checked_at?'No field issues found':'No checks run yet'}</h3><p>${state.job.checked_at?'Check and confirm the details, then create the Word file and check its pages.':'Complete the employee details, then run the field checks.'}</p></div>`;
 }
 function renderOutputs(){
-  const outputs=state.job.outputs;
-  $('#bundle-link').classList.toggle('hidden',!outputs.length);$('#bundle-link').href='/api/bundle?job='+state.job.id;
+  const outputs=state.job.outputs.filter(name=>name.toLowerCase().endsWith('.docx'));
   $('#visual-review-note').classList.toggle('hidden',!outputs.length);
-  $('#outputs-list').innerHTML=outputs.length?[...outputs].reverse().map(name=>{const ext=name.split('.').pop().toLowerCase();const url='/api/file?job='+state.job.id+'&name='+encodeURIComponent(name);return `<article class="output-card"><span class="file-type ${ext}">${ext.toUpperCase()}</span><div class="output-info"><strong dir="auto">${escapeHTML(name)}</strong><p>${ext==='json'?'Confirmed fields and source record':'Saved in your local workspace'}</p></div>${['pdf','html'].includes(ext)?`<a class="button secondary" href="${url}" target="_blank" rel="noopener">Open ↗</a>`:''}<a class="button secondary" href="${url}&download=1">Save copy ↓</a></article>`;}).join(''):'<div class="empty-state"><span>▤</span><h3>Your finished files will appear here</h3><p>Confirm the required fields, then create the Word and PDF files.</p></div>';
+  $('#outputs-list').innerHTML=outputs.length?[...outputs].reverse().map((name,index)=>{const url='/api/file?job='+state.job.id+'&name='+encodeURIComponent(name)+'&download=1';return `<article class="output-card"><span class="file-type">WORD</span><div class="output-info"><strong dir="auto">${escapeHTML(name)}</strong><p>${index===0?'Latest Word revision':'Previous Word revision · kept locally'}</p></div><a class="button primary" href="${url}">Download Word ↓</a></article>`;}).join(''):'<div class="empty-state"><span>▤</span><h3>Your Word contract will appear here</h3><p>Check the details, then choose Create Word.</p></div>';
 }
+
 async function checkFields(){
-  const result=await api('/api/check',savePayload());state.job.findings=result.findings;state.job.checked_at=result.checked_at;state.job.calculations=result.calculations;renderCalculations();renderFindings();updateCounts();setTab('findings');return result.findings;
+  const result=await api('/api/check',savePayload());state.job.findings=result.findings;state.job.validation=result.findings;state.validateAll=true;paintFieldErrors();state.job.checked_at=result.checked_at;state.job.calculations=result.calculations;renderCalculations();renderFindings();updateCounts();setTab('findings');return result.findings;
 }
 async function mainAction(acknowledge=false){
   clearTimeout(saveTimer);
   const issues=await api('/api/check',savePayload());const errors=issues.findings.filter(f=>f.level==='error');
-  if(errors.length){state.job.findings=issues.findings;renderFindings();updateCounts();setTab('findings');throw new Error('Complete the missing or invalid fields first.');}
+  if(errors.length){state.job.findings=issues.findings;state.job.validation=issues.findings;state.validateAll=true;renderFields();renderFindings();updateCounts();setTab('details');focusFirstError();throw new Error('Complete the missing or invalid fields first.');}
   const unconfirmed=Object.keys(state.job.fields).filter(k=>visibleField(k)&&state.job.fields[k].value&&!state.job.fields[k].confirmed);
   if(unconfirmed.length){setTab('details');throw new Error(`Check and confirm the ${unconfirmed.length} remaining filled fields first.`);}
   const warnings=issues.findings.filter(f=>f.level==='warning');
   if(warnings.length&&!acknowledge){$('#warning-content').innerHTML=warnings.map(f=>`<article class="finding warning"><span class="finding-icon">!</span><p>${escapeHTML(f.message)}</p></article>`).join('');$('#acknowledge-warnings').checked=false;$('#create-confirmed').disabled=true;$('#warning-dialog').showModal();return;}
-  const result=await api('/api/generate',{...savePayload(),template_sha:state.boot.templates[fieldValue('contract_type')]?.sha256,acknowledge_warnings:acknowledge});await watchTask(result.task);setTab('outputs');toast('The contract files are ready. Open the PDF for a final page check.');
+  const result=await api('/api/generate',{...savePayload(),template_sha:state.boot.templates[fieldValue('contract_type')]?.sha256,acknowledge_warnings:acknowledge});await watchTask(result.task);setTab('outputs');toast('Your Word contract is ready. It is also saved in Completed contracts.');await refreshBootstrap();
 }
 const templateNames={employment:'Employment contract',service:'Service contract',extension:'Extension letter'};
 function templateURL(template,format='docx'){return '/api/template-file?'+new URLSearchParams({kind:template.kind,...(template.draft?{draft:template.draft}:{}),...(template.sha256?{sha:template.sha256}:{}),format});}
@@ -194,7 +198,7 @@ function showTemplateEditor(result){
   $('#close-template').addEventListener('click',()=>{editor.classList.add('hidden');state.template=null;});
   $('#template-reviewed')?.addEventListener('change',e=>$('#activate-template').disabled=!e.target.checked||!!result.errors.length);
   $('#activate-template')?.addEventListener('click',()=>templateOperation(async()=>{await api('/api/template-activate',{kind:result.kind,draft:result.draft,expected_sha:result.sha256,reviewed:$('#template-reviewed').checked});await refreshBootstrap();renderTemplates();await templateEditor(result.kind);toast('The new template is active. Its previous version is saved locally.');}));
-  $('#preview-template').addEventListener('click',()=>templateOperation(async()=>{const task=await api('/api/template-preview',{kind:result.kind,draft:result.draft,expected_sha:result.sha256});const output=await watchTask(task.task);if(!output?.pages||state.template?.sha256!==result.sha256||state.view!=='templates')return;const preview=$('#template-preview');preview.classList.remove('hidden');preview.innerHTML=`<div class="template-preview-controls"><button class="button secondary" id="template-prev-page" aria-label="Previous template page">←</button><span id="template-page-number"></span><button class="button secondary" id="template-next-page" aria-label="Next template page">→</button><a class="button secondary" href="${templateURL(result,'pdf')}" target="_blank" rel="noopener">Open PDF ↗</a></div><div class="template-preview-page"><img id="template-page-image" alt="Local template page preview"></div>`;let current=1;const render=()=>{$('#template-page-number').textContent=`Page ${current} of ${output.pages}`;$('#template-prev-page').disabled=current===1;$('#template-next-page').disabled=current===output.pages;$('#template-page-image').src='/api/template-page?'+new URLSearchParams({kind:result.kind,...(result.draft?{draft:result.draft}:{}),sha:output.sha256,page:current});};$('#template-prev-page').addEventListener('click',()=>{current--;render();});$('#template-next-page').addEventListener('click',()=>{current++;render();});render();}));
+  $('#preview-template').addEventListener('click',()=>templateOperation(async()=>{const task=await api('/api/template-preview',{kind:result.kind,draft:result.draft,expected_sha:result.sha256});const output=await watchTask(task.task);if(!output?.pages||state.template?.sha256!==result.sha256||state.view!=='templates')return;const preview=$('#template-preview');preview.classList.remove('hidden');preview.innerHTML=`<div class="template-preview-controls"><button class="button secondary" id="template-prev-page" aria-label="Previous template page">←</button><span id="template-page-number"></span><button class="button secondary" id="template-next-page" aria-label="Next template page">→</button></div><div class="template-preview-page"><img id="template-page-image" alt="Local template page preview"></div>`;let current=1;const render=()=>{$('#template-page-number').textContent=`Page ${current} of ${output.pages}`;$('#template-prev-page').disabled=current===1;$('#template-next-page').disabled=current===output.pages;$('#template-page-image').src='/api/template-page?'+new URLSearchParams({kind:result.kind,...(result.draft?{draft:result.draft}:{}),sha:output.sha256,page:current});};$('#template-prev-page').addEventListener('click',()=>{current--;render();});$('#template-next-page').addEventListener('click',()=>{current++;render();});render();}));
   $('#mapping-form').addEventListener('submit',event=>{event.preventDefault();templateOperation(async()=>{const updated=await api('/api/template-save',{kind:result.kind,draft:result.draft,expected_sha:result.sha256,mappings:[{paragraph:$('#map-paragraph').value,before:$('#map-before').value,key:$('#map-key').value}]});showTemplateEditor(updated);$('.template-mapper').open=true;toast('Field mapping saved to a draft. Check it before activating.');});});
   $$('.template-paragraph').forEach(el=>el.addEventListener('mouseup',()=>{const selection=window.getSelection();const selected=selection.toString();if(selected&&el.contains(selection.anchorNode)&&el.contains(selection.focusNode)){$('#map-paragraph').value=el.dataset.paragraph;$('#map-before').value=selected;}}));
   $$('[data-restore-template]').forEach(button=>button.addEventListener('click',()=>templateOperation(async()=>{const updated=await api('/api/template-restore',{kind:result.kind,version:button.dataset.restoreTemplate,expected_sha:state.boot.templates[result.kind]?.sha256||''});showTemplateEditor(updated);toast('Previous version opened as a draft. Check it, then activate it.');})));
@@ -210,8 +214,9 @@ async function importTemplate(file,kind){
   await templateOperation(async()=>{const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result.split(',')[1]);reader.onerror=reject;reader.readAsDataURL(file);});const result=await api('/api/template-import',{kind,name:file.name,data,expected_sha:state.boot.templates[kind]?.sha256||''});showTemplateEditor(result);$('#template-editor').scrollIntoView({behavior:'smooth',block:'start'});toast('Template added as a local draft. Check the fields and pages before using it.');});
 }
 function renderSetup(){
-  $('#setup-cards').innerHTML=`<article class="setup-card"><span class="status-chip">Ready to use</span><h3>Employee details</h3><p>Enter Arabic and English details yourself. Import selected rows from CSV, XLSX or ODS using an explicit column map.</p></article><article class="setup-card"><span class="status-chip">${state.boot.pdf_export?'Available locally':'Install LibreOffice'}</span><h3>Word &amp; PDF</h3><p>Word generation fills your mapped fields. LibreOffice creates a PDF on this computer so you can inspect the pages.</p></article><article class="setup-card"><span class="status-chip">Works offline</span><h3>Your own workspace</h3><p>No AI model, online service or account is required. The app uses its own data folder and keeps each export revision.</p></article>`;
+  $('#setup-cards').innerHTML=`<article class="setup-card"><span class="status-chip">Ready</span><h3>Word contracts</h3><p>Generation fills your approved Word templates. Each export is saved as a separate revision in Completed contracts.</p></article><article class="setup-card"><span class="status-chip">Local storage</span><h3>Your saved work</h3><p>Keep a private backup of this app’s data folder. Word files, editable details, source records and template history are stored there.</p></article><article class="setup-card"><span class="status-chip">Works offline</span><h3>On this computer</h3><p>No AI model or online account is needed. Spreadsheet imports and template controls are available in the small More menu.</p></article>`;
 }
+
 function renderCalculations(){
   if(!state.job)return;const values=state.job.calculations||{};const lines=[];
   if(values.weekday_en)lines.push(`<div><span>Contract weekday</span><strong>${escapeHTML(values.weekday_en)} <b lang="ar" dir="rtl">${escapeHTML(values.weekday_ar)}</b></strong></div>`);
@@ -225,6 +230,39 @@ function chooseSource(role){
   $('#file-picker').click();
 }
 function rowSummary(row){return Object.values(row.cells).map(c=>c.value).filter(Boolean).join(' · ').slice(0,160);}
+function closeToolMenus(){$$('details.more-menu').forEach(menu=>menu.open=false);}
+function paintFieldErrors(){
+  if(!state.job)return;
+  const errors=(state.job.validation||state.job.findings||[]).filter(item=>item.level==='error');const messages={};
+  for(const error of errors){(messages[error.field]||=[]).push(error.message);if(error.field==='issuer_ar'&&error.message.includes('both languages'))(messages.issuer_en||=[]).push(error.message);}
+  let shown=0;
+  $$('.field-row').forEach(row=>{
+    const key=row.dataset.row;const input=$('#field-'+key);const target=$('#error-'+key);if(!input||!target)return;
+    const visible=state.validateAll||state.touched.has(key)||!!state.job.fields[key]?.value;
+    const text=visible?(messages[key]||[]).join(' '):'';
+    row.classList.toggle('invalid',!!text);target.classList.toggle('hidden',!text);target.textContent=text;
+    if(text){input.setAttribute('aria-invalid','true');input.setAttribute('aria-describedby',target.id);shown++;}
+    else{input.removeAttribute('aria-invalid');input.removeAttribute('aria-describedby');}
+  });
+  $('#form-error-summary').classList.toggle('hidden',!shown);
+  $('#form-error-summary').innerHTML=shown?`<strong>${shown} ${shown===1?'field needs':'fields need'} correction.</strong> Check the fields marked in red. <button class="inline-link" id="first-field-error">Go to first error ↓</button>`:'';
+  $('#first-field-error')?.addEventListener('click',focusFirstError);
+}
+function focusFirstError(){
+  const input=$('.field-row.invalid .field-input');if(input){input.scrollIntoView({behavior:'smooth',block:'center'});input.focus({preventScroll:true});}
+}
+function renderCompleted(){
+  const query=($('#completed-search').value||'').trim().toLocaleLowerCase();const kind=$('#completed-kind').value;
+  const jobs=(state.boot.completed||[]).filter(job=>(!kind||job.kind===kind)&&(!query||(job.title+' '+(job.latest_word||'')).toLocaleLowerCase().includes(query)));
+  $('#completed-count').textContent=`${jobs.length} ${jobs.length===1?'contract':'contracts'}`;
+  $('#completed-list').innerHTML=jobs.length?jobs.map(job=>`<article class="completed-card"><div class="completed-icon">▤</div><div class="completed-info"><span class="eyebrow">${escapeHTML(templateNames[job.kind]||job.kind)}</span><h3 dir="auto">${escapeHTML(job.title)}</h3><p>${job.word_count} saved Word ${job.word_count===1?'revision':'revisions'}${job.has_changes?' · Draft changes saved; export to update Word':''}${job.last_exported?' · '+escapeHTML(dateLabel(job.last_exported)):''}</p><small dir="auto">${escapeHTML(job.latest_word)}</small></div><div class="completed-actions"><a class="button primary" href="/api/file?job=${job.id}&name=${encodeURIComponent(job.latest_word)}&download=1">Download Word ↓</a><button class="button secondary" data-open-completed="${job.id}">${job.archive_only?'View saved files':'Edit saved details'}</button><button class="inline-link" data-upload-revision="${job.id}">Save edited Word ↥</button></div></article>`).join(''):'<div class="empty-state completed-empty"><span>▤</span><h3>No completed contracts here yet</h3><p>Create a Word contract, or add an existing Word file above.</p></div>';
+}
+function archiveDialog(jobId=null){
+  state.archiveJob=jobId;state.archiveFile=null;$('#archive-form').reset();$('#archive-error').textContent='';$('#archive-file-name').textContent='No file selected';$('#save-archive-word').disabled=true;
+  $('#archive-metadata').classList.toggle('hidden',!!jobId);
+  $('#archive-dialog-title').textContent=jobId?'Save a Word revision':'Add an existing Word contract';$('#archive-dialog').showModal();
+}
+function encodedFile(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result.split(',')[1]);reader.onerror=reject;reader.readAsDataURL(file);});}
 async function openSheet(sourceId,index=0,header=null){
   if(state.task)throw new Error('Wait for the current step to finish.');
   await saveJob();
@@ -266,13 +304,16 @@ function renderSheetMappings(){
   $('#sheet-mappings').innerHTML=sheet.data.columns.map(column=>{const item=row?.cells[column];return `<tr><td>${column}</td><td dir="auto">${escapeHTML(header?.cells[column]?.value||'—')}</td><td dir="auto" class="sheet-cell-value">${escapeHTML(item?.value||'—')}${item?.formula?'<small>Saved formula result</small>':''}</td><td><select class="sheet-map" data-column="${column}" aria-label="Contract field for column ${column}"><option value="">Do not import</option>${state.boot.fields.map(([key,en,ar])=>`<option value="${key}" ${sheet.mappings[column]===key?'selected':''}>${escapeHTML(en)} · ${escapeHTML(ar)}</option>`).join('')}</select></td></tr>`;}).join('');
   $$('.sheet-map').forEach(select=>select.addEventListener('change',()=>sheet.mappings[select.dataset.column]=select.value));
 }
-function handleError(error){if(error.findings&&state.job){state.job.findings=error.findings;renderFindings();updateCounts();}if($('#sheet-dialog').open&&$('#sheet-message'))$('#sheet-message').textContent=error.message;toast(error.message||'The action could not finish.',true);}
+function handleError(error){if(error.findings&&state.job){state.job.findings=error.findings;state.job.validation=error.findings;state.validateAll=true;paintFieldErrors();renderFindings();updateCounts();}if($('#identity-dialog').open)$('#identity-type-error').textContent=error.message;if($('#archive-dialog').open)$('#archive-error').textContent=error.message;if($('#sheet-dialog').open&&$('#sheet-message'))$('#sheet-message').textContent=error.message;toast(error.message||'The action could not finish.',true);}
 
 document.addEventListener('click',async event=>{
   const nav=event.target.closest('[data-nav]');if(nav){if(state.task){toast('Wait for the current step to finish.');return;}if(state.job)await saveJob().catch(handleError);await refreshBootstrap().catch(handleError);setView(nav.dataset.nav);}
+  if(nav)closeToolMenus();
   const start=event.target.closest('[data-new]');if(start){if(state.task){toast('Wait for the current step to finish.');return;}newDialog(start.dataset.new);}
   const tab=event.target.closest('[data-tab]');if(tab&&state.job)setTab(tab.dataset.tab);
   const job=event.target.closest('[data-job]');if(job)openJob(job.dataset.job).catch(handleError);
+  const completed=event.target.closest('[data-open-completed]');if(completed)openJob(completed.dataset.openCompleted).catch(handleError);
+  const revision=event.target.closest('[data-upload-revision]');if(revision)archiveDialog(revision.dataset.uploadRevision);
   const add=event.target.closest('[data-add-role]');if(add){state.role=add.dataset.addRole;chooseSource(state.role);}
   const sheet=event.target.closest('[data-sheet-source]');if(sheet)openSheet(sheet.dataset.sheetSource).catch(handleError);
   const preview=event.target.closest('[data-preview]');if(preview){state.source=preview.dataset.preview;state.page=1;setTab('details');renderViewer();}
@@ -283,16 +324,25 @@ document.addEventListener('click',async event=>{
 });
 document.addEventListener('input',event=>{
   const key=event.target.dataset.field;
-  if(key&&state.job){state.job.findings=[];delete state.job.checked_at;state.job.fields[key].value=event.target.value;state.job.fields[key].confirmed=false;state.job.fields[key].origin='entered by you';const row=event.target.closest('.field-row');row.classList.remove('confirmed');const check=$('[data-confirm]',row);check.checked=false;check.disabled=!event.target.value;updateCounts();queueSave();}
+  if(key&&state.job){if(key==='identity_type'&&event.target.value==='__add__')return;state.touched.add(key);state.job.findings=[];delete state.job.checked_at;state.job.fields[key].value=event.target.value;state.job.fields[key].confirmed=false;state.job.fields[key].origin='entered by you';const row=event.target.closest('.field-row');row.classList.remove('confirmed','invalid');event.target.removeAttribute('aria-invalid');$('#error-'+key).classList.add('hidden');const check=$('[data-confirm]',row);check.checked=false;check.disabled=!event.target.value;updateCounts();queueSave();}
 });
 document.addEventListener('change',event=>{
   const key=event.target.dataset.confirm;
   if(key&&state.job){state.job.fields[key].confirmed=event.target.checked;event.target.closest('.field-row').classList.toggle('confirmed',event.target.checked);updateCounts();queueSave();}
+  if(event.target.dataset.field==='identity_type'&&event.target.value==='__add__'){event.target.value=state.job.fields.identity_type.value;$('#identity-form').reset();$('#identity-type-error').textContent='';$('#identity-dialog').showModal();}
   if(event.target.dataset.field==='contract_type'){renderFields();renderCalculations();updateCounts();}
 });
 $('#new-form').addEventListener('submit',async event=>{event.preventDefault();try{const job=await api('/api/new',{kind:$('#new-kind').value});$('#new-dialog').close();await refreshBootstrap();await openJob(job.id);if(state.mode==='spreadsheet')chooseSource('list');}catch(error){handleError(error);}});
 $('#file-picker').addEventListener('change',event=>{const file=event.target.files[0];event.target.value='';if(file)importFile(file,state.role).catch(handleError);});
-$('#quick-sheet').addEventListener('click',()=>chooseSource('list'));
+$('#quick-sheet').addEventListener('click',()=>{chooseSource('list');closeToolMenus();});
+$('#more-spreadsheet').addEventListener('click',()=>{closeToolMenus();if(state.view==='job'&&!state.job.archive_only)chooseSource('list');else newDialog('spreadsheet');});
+$('#completed-search').addEventListener('input',renderCompleted);
+$('#completed-kind').addEventListener('change',renderCompleted);
+$('#add-archived-word').addEventListener('click',()=>archiveDialog());
+$('#choose-archive-word').addEventListener('click',()=>$('#archive-picker').click());
+$('#archive-picker').addEventListener('change',event=>{const file=event.target.files[0];event.target.value='';if(!file)return;if(!file.name.toLowerCase().endsWith('.docx')||file.size>25*1024*1024){$('#archive-error').textContent='Choose a Word .docx file up to 25 MB.';return;}state.archiveFile=file;$('#archive-file-name').textContent=file.name;$('#archive-error').textContent='';if(!$('#archive-title').value)$('#archive-title').value=file.name.replace(/\.docx$/i,'');$('#save-archive-word').disabled=false;});
+$('#archive-form').addEventListener('submit',async event=>{event.preventDefault();if(!state.archiveFile)return;const button=$('#save-archive-word');button.disabled=true;try{const result=await api('/api/archive-word',{job:state.archiveJob,name:state.archiveFile.name,data:await encodedFile(state.archiveFile),title:$('#archive-title').value,kind:$('#archive-kind').value});if(state.job?.id===result.job.id)state.job=result.job;await refreshBootstrap();renderCompleted();$('#archive-dialog').close();toast('Word revision saved in Completed contracts.');}catch(error){handleError(error);}finally{button.disabled=false;}});
+$('#identity-form').addEventListener('submit',async event=>{event.preventDefault();const button=$('#identity-form button[type=submit]');button.disabled=true;try{const result=await api('/api/identity-type',{ar:$('#identity-label-ar').value,en:$('#identity-label-en').value,verb_ar:$('#identity-verb').value,article_en:$('#identity-article').value});state.boot.identity_types=result.identity_types;state.job.fields.identity_type={value:result.identity_type.id,confirmed:false,evidence:[],origin:'chosen by you'};state.touched.add('identity_type');state.job.findings=[];delete state.job.checked_at;renderFields();updateCounts();queueSave();$('#identity-dialog').close();toast('Document type saved. It is available for future contracts.');}catch(error){handleError(error);}finally{button.disabled=false;}});
 $('#template-picker').addEventListener('change',event=>{const file=event.target.files[0];event.target.value='';if(file)importTemplate(file,state.templateKind).catch(handleError);});
 $('#save-job').addEventListener('click',()=>saveJob(false).catch(handleError));
 $('#back-workspace').addEventListener('click',async()=>{if(state.task){toast('Wait for the current step to finish.');return;}await saveJob().catch(handleError);await refreshBootstrap();setView('workspace');});

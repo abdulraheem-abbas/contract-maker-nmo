@@ -21,7 +21,7 @@ def app(tmp_path,monkeypatch):
     path.write_bytes(raw)
     (tmp_path/'templates/registry.json').write_text(json.dumps({'employment':{'path':str(path),'label':'Test employment','sha256':template_manager.digest(raw),'placeholders':template_manager.inspect(raw)['placeholders']}}))
     def no_office(*args):raise ValueError('Office unavailable for this unit check')
-    monkeypatch.setattr(server,'to_pdf',no_office)
+    monkeypatch.setattr(office,'to_pdf',no_office)
     http=server.AppServer(('127.0.0.1',0),server.Handler)
     thread=threading.Thread(target=http.serve_forever,daemon=True);thread.start()
     base=f'http://127.0.0.1:{http.server_port}'
@@ -103,9 +103,11 @@ def test_generation_requires_confirmation_and_expiry_acknowledgement(app):
     values['identity_number']['confirmed']=True;values['identity_expiry_date']['value']='2024-06-01'
     with pytest.raises(HTTPError):app['post']('/api/generate',{'job':job['id'],'fields':values})
     result=app['wait'](app['post']('/api/generate',{'job':job['id'],'fields':values,'acknowledge_warnings':True})['task'])
-    assert result['pdf_error']
+    assert result=={'job':job['id']}
     saved=app['get']('/api/job?id='+job['id'])
-    assert any(name.endswith('.docx') for name in saved['outputs'])
+    assert len(saved['outputs'])==1 and saved['outputs'][0].endswith('.docx')
+    assert [path.suffix for path in (app['data']/'outputs'/job['id']).iterdir()]==['.docx']
+    assert (app['data']/'records'/job['id']/'revision-1.json').is_file()
     assert saved['last_generation']['template']['sha256']
     assert saved['last_generation']['confirmed_fields']['identity_number']['value']=='00001234'
 
@@ -119,3 +121,43 @@ def test_busy_workspace_rejects_mutations_without_losing_saved_data(app):
         assert store.get_job(job['id'])['fields']['name_en']['value']==''
     finally:release.set()
     app['wait'](task['task'])
+
+
+def test_completed_contract_reopens_and_keeps_earlier_word_revisions(app):
+    job=app['post']('/api/new',{})
+    assert not app['get']('/api/completed')
+    app['wait'](app['post']('/api/generate',{'job':job['id'],'fields':fields()})['task'])
+    first=app['get']('/api/job?id='+job['id']);name=first['outputs'][0]
+    original=(app['data']/'outputs'/job['id']/name).read_bytes()
+    changed=fields();changed['salary_usd']['value']='900.25'
+    app['post']('/api/save',{'job':job['id'],'fields':changed})
+    assert app['get']('/api/completed')[0]['has_changes']
+    app['wait'](app['post']('/api/generate',{'job':job['id'],'fields':changed})['task'])
+    saved=app['get']('/api/job?id='+job['id']);completed=app['get']('/api/completed')
+    assert len(saved['outputs'])==2 and completed[0]['word_count']==2
+    assert not completed[0]['has_changes']
+    assert (app['data']/'outputs'/job['id']/name).read_bytes()==original
+    assert saved['fields']['salary_usd']['value']=='900.25'
+
+
+def test_archive_accepts_existing_word_and_keeps_uploaded_changes_exactly(app):
+    raw=word(['Existing Word contract · preserve this wording.'])
+    result=app['post']('/api/archive-word',{'name':'Existing.docx','title':'Test archived contract','kind':'service','data':base64.b64encode(raw).decode()})
+    job=result['job'];assert job['archive_only'] and len(job['outputs'])==1
+    updated=word(['Edited outside the app.'])
+    result=app['post']('/api/archive-word',{'job':job['id'],'name':'Edited.docx','data':base64.b64encode(updated).decode()})
+    assert len(result['job']['outputs'])==2
+    folder=app['data']/'outputs'/job['id']
+    assert (folder/job['outputs'][0]).read_bytes()==raw
+    assert (folder/result['job']['outputs'][1]).read_bytes()==updated
+    assert not result['job']['fields']['name_ar']['value']
+
+
+def test_legacy_pdf_and_evidence_files_are_hidden_from_exports(app):
+    from urllib.parse import quote
+    job=app['post']('/api/new',{});folder=app['data']/'outputs'/job['id'];folder.mkdir()
+    for filename in ['Previous.docx','Previous.pdf','Previous-evidence.json']:(folder/filename).write_bytes(b'saved local file')
+    job['outputs']=['Previous.docx','Previous.pdf','Previous-evidence.json'];store.save_job(job)
+    assert app['get']('/api/job?id='+job['id'])['outputs']==['Previous.docx']
+    for filename in ['Previous.pdf','Previous-evidence.json']:
+        with pytest.raises(HTTPError):app['get']('/api/file?job='+job['id']+'&name='+quote(filename))

@@ -58,6 +58,7 @@ test-results/
 *.sqlite3
 *.sqlite3-*
 rules.json
+identity-types.json
 engine.json
 app-address.json
 model-choice.json

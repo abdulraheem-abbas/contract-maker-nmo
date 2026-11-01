@@ -102,11 +102,12 @@ def required_fields(kind):
     return {'contract_type', 'name_ar', 'name_en', 'execution_date', 'start_date', 'end_date','original_contract_date'}
 
 def validate(values, require_confirmation=False):
+    from .documents import catalog
     issues = []
     kind = values.get('contract_type', {}).get('value', '')
     if kind not in {'employment', 'service', 'extension'}:
         issues.append({'level':'error', 'field':'contract_type', 'message':'Choose the contract type.'})
-    for key,allowed in [('identity_type',{'passport','id_card','national_id',''}),('gender',{'male','female',''})]:
+    for key,allowed in [('identity_type',{d['id'] for d in catalog()}|{''}),('gender',{'male','female',''})]:
         if values.get(key,{}).get('value','') not in allowed:
             issues.append({'level':'error','field':key,'message':f'Choose a supported value for {LABELS[key]}.'})
     if require_confirmation:

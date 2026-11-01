@@ -32,7 +32,8 @@ with tempfile.TemporaryDirectory(prefix='nmo-contract-check-') as temporary:
     replacement=Path(temporary)/'replacement.docx';replacement.write_bytes(word(['Updated approved wording.']+paragraphs+['Grade: {{grade_en}} | {{grade_ar}}']))
     sample=Path(temporary)/'employees.csv';values={k:v['value'] for k,v in fields().items()}
     with sample.open('w',newline='',encoding='utf-8') as handle:
-        writer=csv.DictWriter(handle,fieldnames=list(values));writer.writeheader();writer.writerow(values);writer.writerow({**values,'name_en':'Test Second Employee','name_ar':'موظف تجريبي ثان غير حقيقي','identity_number':'00009876'})
+        writer=csv.DictWriter(handle,fieldnames=list(values));writer.writeheader();writer.writerow(values);writer.writerow({**values,'name_en':'Test Second Employee','name_ar':'موظف تجريبي ثان غير حقيقي','identity_number':'00009876','identity_type':'refugee_card'})
+    edited=Path(temporary)/'edited-contract.docx';edited.write_bytes(word(['Edited in Word · preserve this exact wording.']))
     env=dict(os.environ);env['NMO_CONTRACTS_DATA']=str(data)
     client=build_opener(ProxyHandler({}),HTTPCookieProcessor(CookieJar()))
     command=[str(ROOT/'NMO Contract Maker.app/Contents/MacOS/NMO Contract Maker')] if args.app else [sys.executable,str(ROOT/'run.py')]
@@ -57,18 +58,20 @@ with tempfile.TemporaryDirectory(prefix='nmo-contract-check-') as temporary:
             if not base:raise RuntimeError('The temporary app did not become ready.')
             client.open(base).read();boot=json.load(client.open(base+'/api/bootstrap'))
             assert boot['generation_only'] and not boot['requires_models'] and 'engine' not in boot
-            (results/'browser-config.json').write_text(json.dumps({'base':base,'spreadsheet':str(sample),'replacement':str(replacement),'fields':values}))
+            (results/'browser-config.json').write_text(json.dumps({'base':base,'spreadsheet':str(sample),'replacement':str(replacement),'edited_word':str(edited),'fields':values}))
             node=shutil.which('node') or str(Path.home()/'.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node')
             subprocess.run([node,str(ROOT/'tools/browser_checks.cjs')],cwd=ROOT,check=True)
             exports={}
             for kind in ['service','extension']:
                 job=post('/api/new',{'kind':kind})
                 result=wait(post('/api/generate',{'job':job['id'],'fields':fields(kind)})['task'])
-                assert not result.get('pdf_error')
+                assert result=={'job':job['id']}
                 saved=json.load(client.open(base+'/api/job?id='+job['id']))
                 assert saved['last_generation']['template_text_preserved'] and saved['last_generation']['other_package_parts_unchanged']
-                exports[kind]=saved['last_generation']['pdf_pages']
-            report={'runtime':'packaged app' if args.app else 'Python source','all_contract_types':'Word/PDF passed','additional_export_pages':exports,'model_engine':'not required or contacted','workspace':'disposable fictional data'}
+                assert len(saved['outputs'])==1 and saved['outputs'][0].endswith('.docx')
+                assert not list((data/'outputs'/job['id']).glob('*.pdf'))
+                exports[kind]=len(saved['outputs'])
+            report={'runtime':'packaged app' if args.app else 'Python source','all_contract_types':'Word only passed','additional_word_exports':exports,'model_engine':'not required or contacted','workspace':'disposable fictional data'}
             (results/'integration-check.json').write_text(json.dumps(report,indent=2));print(json.dumps(report))
         finally:
             if base and boot:

@@ -15,7 +15,7 @@ ALLOWED_EXTENSIONS = {".pdf", ".docx", ".jpg", ".jpeg", ".png", ".ods", ".xlsx",
 
 def initialize():
     os.umask(0o077)
-    for folder in ["", "sources", "templates", "outputs", "cache", "logs"]:
+    for folder in ["", "sources", "templates", "outputs", "cache", "logs", "records"]:
         path = DATA / folder
         path.mkdir(parents=True, exist_ok=True)
         try:

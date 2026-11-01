@@ -168,16 +168,17 @@ def prepare_template(source,destination,bindings):
     return {'sha256':hashlib.sha256(destination.read_bytes()).hexdigest(),'placeholders':sorted(set(TOKEN.findall(text(root))))}
 
 def identity_details(values,language):
+    from .documents import document_type
     kind=values.get('identity_type','id_card')
+    document=document_type(kind)
     number=values['identity_number']
     issued=identity_date(values['identity_issue_date'])
     city=values.get('issuer_'+language,'').strip()
     if language=='ar':
-        label='جواز سفر' if kind=='passport' else 'بطاقة شخصية بالرقم الوطني' if kind=='national_id' else 'بطاقة شخصية'
-        verb='صادر' if kind=='passport' else 'صادرة'
-        return f'{label}'+(' ' if kind=='national_id' else ' رقم ')+f'\u200e{number}\u200e {verb}'+(f' من {city}' if city else '')+f' بتاريخ \u200e{issued}\u200e'
-    label='a Passport' if kind=='passport' else 'an ID Card with National Number' if kind=='national_id' else 'an ID Card'
-    return f'{label}'+(' ' if kind=='national_id' else ' number ')+number+(' issued in '+city if city else ' issued')+' on '+issued
+        label=document['ar'];verb=document['verb_ar']
+        return f'{label}'+(' ' if document.get('national_number') else ' رقم ')+f'\u200e{number}\u200e {verb}'+(f' من {city}' if city else '')+f' بتاريخ \u200e{issued}\u200e'
+    label=(document['article_en']+' ' if document['article_en'] else '')+document['en']
+    return f'{label}'+(' ' if document.get('national_number') else ' number ')+number+(' issued in '+city if city else ' issued')+' on '+issued
 
 def render_values(fields):
     values={key:str(value.get('value','')).strip() for key,value in fields.items()}
