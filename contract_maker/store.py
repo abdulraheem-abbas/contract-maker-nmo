@@ -16,6 +16,8 @@ def connection():
     db.execute('CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, title TEXT NOT NULL, content TEXT NOT NULL, updated TEXT NOT NULL)')
     db.execute('CREATE TABLE IF NOT EXISTS sources (id TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT NOT NULL, path TEXT NOT NULL, sha256 TEXT NOT NULL, pages TEXT NOT NULL, created TEXT NOT NULL)')
     db.execute('CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY, job TEXT, action TEXT NOT NULL, detail TEXT NOT NULL, created TEXT NOT NULL)')
+    db.execute('CREATE TABLE IF NOT EXISTS tags (id TEXT PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL, created TEXT NOT NULL)')
+    db.execute('CREATE TABLE IF NOT EXISTS group_tags (group_id TEXT NOT NULL, tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE, PRIMARY KEY(group_id,tag_id))')
     return db
 
 def save_job(job):
@@ -42,7 +44,8 @@ def jobs():
     return result
 
 def completed():
-    return [{**job,'draft_title':job['title'],'title':job['exported_title']} for job in jobs() if job['word_count']]
+    from .archive import completed as grouped_contracts
+    return grouped_contracts()
 
 def add_source(name, role, path, pages):
     source_id = uuid.uuid4().hex

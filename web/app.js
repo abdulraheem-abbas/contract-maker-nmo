@@ -20,13 +20,14 @@ async function api(path,body){
 function toast(message,error=false){clearTimeout(toastTimer);const el=$('#toast');el.textContent=NMOI18n.message(message);el.classList.remove('hidden');el.classList.toggle('error',error);toastTimer=setTimeout(()=>el.classList.add('hidden'),6500);}
 function setView(view){
   state.view=view;
-  for(const name of ['workspace','job','completed','templates','setup'])$(`#${name}-view`).classList.toggle('hidden',name!==view);
-  $$('.nav').forEach(n=>n.classList.toggle('active',n.dataset.nav===(view==='job'?'workspace':view)));
-  $('#breadcrumb').textContent=({workspace:t('My workspace'),job:t('My workspace / Contract details'),completed:t('Completed contracts'),templates:t('Templates & rules'),setup:t('About & storage')})[view];
+  for(const name of ['workspace','job','completed','history','templates','setup'])$(`#${name}-view`).classList.toggle('hidden',name!==view);
+  $$('.nav').forEach(n=>n.classList.toggle('active',n.dataset.nav===(view==='job'?'workspace':view==='history'?'completed':view)));
+  $('#breadcrumb').textContent=({workspace:t('My workspace'),job:t('My workspace / Contract details'),completed:t('Completed contracts'),history:t('Contract history'),templates:t('Templates & rules'),setup:t('About & storage')})[view];
   if(view==='workspace')renderJobs();
   if(view==='completed')renderCompleted();
   if(view==='templates')renderTemplates();
   if(view==='setup')renderSetup();
+  if(view==='history')renderHistory();
   window.scrollTo({top:0,behavior:'instant'});
 }
 function dateLabel(value){try{return new Date(value).toLocaleDateString(NMOI18n.locale(),{day:'numeric',month:'short'});}catch{return '';}}
@@ -56,7 +57,7 @@ function requiredFields(){
   const kind=fieldValue('contract_type');
   const common=['contract_type','name_ar','name_en','gender','identity_type','identity_number','identity_issue_date','execution_date','start_date','end_date','job_title_ar','job_title_en','workplace_ar','workplace_en','salary_usd','manager_title_ar','manager_title_en'];
   let required=kind==='employment'?[...common,'grade_ar','grade_en']:kind==='service'?[...common,'manager_name_ar','manager_name_en','project_ar','project_en']:['contract_type','name_ar','name_en','execution_date','start_date','end_date','original_contract_date'];
-  return [...new Set([...required,...(state.boot.templates[kind]?.required_fields||[])])];
+  return [...new Set([...required,...((state.job.template_reference?.kind===kind?state.job.template_required_fields:state.boot.templates[kind]?.required_fields)||[])])];
 }
 function updateCounts(){
   if(!state.job)return;
@@ -67,7 +68,10 @@ function updateCounts(){
 function renderJob(){
   const kind=fieldValue('contract_type');$('#job-kind').textContent=kindLabel(kind);
   $('#job-title').textContent=jobLabel(state.job);
-  $('#main-action').innerHTML=ui('Create Word <span>↗</span>');
+  $('#main-action').innerHTML=state.job.editing_target?ui('Save version & download <span>↗</span>'):ui('Create Word <span>↗</span>');
+  $('#version-edit-note').classList.toggle('hidden',!state.job.editing_version&&!state.job.template_warning);
+  $('#version-edit-note').textContent=state.job.editing_version?t(state.job.editing_target?'Updating Version {number}. Other versions stay saved.':'Editing a new copy of Version {number}. The original stays saved.',{number:state.job.editing_version}):'';
+  if(state.job.template_warning)$('#version-edit-note').textContent+=' '+message(state.job.template_warning);
   $('#main-action').classList.toggle('hidden',!!state.job.archive_only);$('#save-job').classList.toggle('hidden',!!state.job.archive_only);
   $$('.tab').forEach(tab=>tab.classList.toggle('hidden',!!state.job.archive_only&&tab.dataset.tab!=='outputs'));
   renderSaveStatus();
@@ -93,7 +97,7 @@ const fieldGroups=[
 ];
 function visibleField(key){
   const kind=fieldValue('contract_type');
-  if(state.boot.templates[kind]?.required_fields?.includes(key))return true;
+  if((state.job.template_reference?.kind===kind?state.job.template_required_fields:state.boot.templates[kind]?.required_fields)?.includes(key))return true;
   if(key==='original_contract_date'&&kind!=='extension')return false;
   if(kind==='extension'&&!requiredFields().includes(key)&&!['issuer_ar','issuer_en','identity_expiry_date'].includes(key))return false;
   if(kind==='employment'&&['manager_name_ar','manager_name_en','manager_base_ar','manager_base_en','project_ar','project_en'].includes(key))return false;
@@ -188,9 +192,10 @@ function renderFindings(){
   $('#findings-list').innerHTML=findings.length?[...findings].sort((a,b)=>['error','warning','pass'].indexOf(a.level)-['error','warning','pass'].indexOf(b.level)).map(f=>ui`<article class="finding ${f.level}"><span class="finding-icon">${{error:'!',warning:'!',pass:'✓'}[f.level]}</span><div><h3>${escapeHTML(labels[f.field]||f.field||t('Document'))}</h3><p>${escapeHTML(message(f.message))}</p>${f.expected?ui`<p dir="auto">Expected: ${escapeHTML(f.expected)}</p>`:''}</div><small>${f.page?t('Page {page} of {pages}',{page:f.page,pages:'—'}):t('Check field')}</small></article>`).join(''):ui`<div class="empty-state"><span>✓</span><h3>${state.job.checked_at?t('No field issues found'):t('No checks run yet')}</h3><p>${state.job.checked_at?t('Check and confirm the details, then create the Word file and check its pages.'):t('Complete the employee details, then run the field checks.')}</p></div>`;
 }
 function renderOutputs(){
-  const outputs=state.job.outputs.filter(name=>name.toLowerCase().endsWith('.docx'));
+  const outputs=(state.job.edit_shadow?state.job.outputs.slice(-1):state.job.outputs).filter(name=>name.toLowerCase().endsWith('.docx')).slice().reverse();
   $('#visual-review-note').classList.toggle('hidden',!outputs.length);
-  $('#outputs-list').innerHTML=outputs.length?[...outputs].reverse().map((name,index)=>{const url='/api/file?job='+state.job.id+'&name='+encodeURIComponent(name)+'&download=1';return ui`<article class="output-card"><span class="file-type">WORD</span><div class="output-info"><strong dir="auto">${escapeHTML(name)}</strong><p>${index===0?t('Latest Word revision'):t('Previous Word revision · kept locally')}</p></div><a class="button primary" href="${url}">Download Word ↓</a></article>`;}).join(''):ui('<div class="empty-state"><span>▤</span><h3>Your Word contract will appear here</h3><p>Check the details, then choose Create Word.</p></div>');
+  const card=(name,index)=>{const url='/api/file?job='+state.job.id+'&name='+encodeURIComponent(name)+'&download=1';const metadata=state.job.revisions?.find(r=>r.name===name);return ui`<article class="output-card"><span class="file-type">WORD</span><div class="output-info"><strong dir="auto">${escapeHTML(state.job.output_labels?.[name]||name)}</strong><p>${index===0?t('Latest Word revision'):t('Previous Word revision · kept locally')}</p>${metadata?.created?ui`<p>${escapeHTML(t('Created: {date}',{date:dateTimeLabel(metadata.created)}))}</p>`:''}</div><a class="button primary" href="${url}">Download Word ↓</a></article>`;};
+  $('#outputs-list').innerHTML=outputs.length?card(outputs[0],0)+(outputs.length>1?ui`<details class="output-history"><summary>${t('Earlier versions ({count})',{count:outputs.length-1})}</summary>${outputs.slice(1).map((name,i)=>card(name,i+1)).join('')}</details>`:''):ui('<div class="empty-state"><span>▤</span><h3>Your Word contract will appear here</h3><p>Check the details, then choose Create Word.</p></div>');
 }
 
 async function checkFields(){
@@ -205,7 +210,7 @@ async function mainAction(acknowledge=false){
   if(unconfirmed.length){setTab('details');throw new Error(t('Check and confirm the {count} remaining filled fields first.',{count:unconfirmed.length}));}
   const warnings=issues.findings.filter(f=>f.level==='warning');
   if(warnings.length&&!acknowledge){state.warningFindings=warnings;$('#warning-content').innerHTML=warnings.map(f=>ui`<article class="finding warning"><span class="finding-icon">!</span><p>${escapeHTML(message(f.message))}</p></article>`).join('');$('#acknowledge-warnings').checked=false;$('#create-confirmed').disabled=true;$('#warning-dialog').showModal();return;}
-  const result=await api('/api/generate',{...savePayload(),template_sha:state.boot.templates[fieldValue('contract_type')]?.sha256,acknowledge_warnings:acknowledge});await watchTask(result.task);setTab('outputs');toast(t('Your Word contract is ready. It is also saved in Completed contracts.'));await refreshBootstrap();
+  const result=await api('/api/generate',{...savePayload(),template_sha:state.boot.templates[fieldValue('contract_type')]?.sha256,acknowledge_warnings:acknowledge});await watchTask(result.task);setTab('outputs');downloadLatestWord();toast(t('Your Word contract is ready. It is also saved in Completed contracts.'));await refreshBootstrap();
 }
 const templateNames={get employment(){return kindLabel('employment');},get service(){return kindLabel('service');},get extension(){return kindLabel('extension');}};
 function templateURL(template,format='docx'){return '/api/template-file?'+new URLSearchParams({kind:template.kind,...(template.draft?{draft:template.draft}:{}),...(template.sha256?{sha:template.sha256}:{}),format});}
@@ -277,13 +282,15 @@ function paintFieldErrors(){
 function focusFirstError(){
   const input=$('.field-row.invalid .field-input');if(input){input.scrollIntoView({behavior:'smooth',block:'center'});input.focus({preventScroll:true});}
 }
-function renderCompleted(){
+function renderCompletedLegacy(){
   const query=($('#completed-search').value||'').trim().toLocaleLowerCase();const kind=$('#completed-kind').value;
   const jobs=(state.boot.completed||[]).filter(job=>(!kind||job.kind===kind)&&(!query||(job.title+' '+(job.latest_word||'')).toLocaleLowerCase().includes(query)));
   $('#completed-count').textContent=isArabic()?t('{count} contracts',{count:jobs.length}):`${jobs.length} ${jobs.length===1?'contract':'contracts'}`;
-  $('#completed-list').innerHTML=jobs.length?jobs.map(job=>ui`<article class="completed-card"><div class="completed-icon">▤</div><div class="completed-info"><span class="eyebrow">${escapeHTML(templateNames[job.kind]||job.kind)}</span><h3 dir="auto">${escapeHTML(jobLabel(job))}</h3><p>${isArabic()?t('{count} saved Word revisions',{count:job.word_count}):`${job.word_count} saved Word ${job.word_count===1?'revision':'revisions'}`} ${job.has_changes?t('· Draft changes saved; export to update Word'):''}${job.last_exported?' · '+escapeHTML(dateLabel(job.last_exported)):''}</p><small dir="auto">${escapeHTML(job.latest_word)}</small></div><div class="completed-actions"><a class="button primary" href="/api/file?job=${job.id}&name=${encodeURIComponent(job.latest_word)}&download=1">Download Word ↓</a><button class="button secondary" data-open-completed="${job.id}">${job.archive_only?t('View saved files'):t('Edit saved details')}</button><button class="inline-link" data-upload-revision="${job.id}">Save edited Word ↥</button></div></article>`).join(''):ui('<div class="empty-state completed-empty"><span>▤</span><h3>No completed contracts here yet</h3><p>Create a Word contract, or add an existing Word file above.</p></div>');
+  $('#completed-list').innerHTML=jobs.length?jobs.map(job=>ui`<article class="completed-card"><div class="completed-icon">▤</div><div class="completed-info"><span class="eyebrow">${escapeHTML(templateNames[job.kind]||job.kind)}</span><h3 dir="auto">${escapeHTML(jobLabel(job))}</h3><p>${isArabic()?t('{count} saved Word revisions',{count:job.word_count}):`${job.word_count} saved Word ${job.word_count===1?'revision':'revisions'}`} ${job.has_changes?t('· Draft changes saved; export to update Word'):''}${job.last_exported?' · '+escapeHTML(dateLabel(job.last_exported)):''}</p><small dir="auto">${escapeHTML(job.latest_label||job.latest_word)}</small></div><div class="completed-actions"><a class="button primary" href="/api/file?job=${job.id}&name=${encodeURIComponent(job.latest_word)}&download=1">Download Word ↓</a><button class="button secondary" data-open-completed="${job.id}">${job.archive_only?t('View saved files'):t('Edit saved details')}</button><button class="inline-link" data-upload-revision="${job.id}">Save edited Word ↥</button></div></article>`).join(''):ui('<div class="empty-state completed-empty"><span>▤</span><h3>No completed contracts here yet</h3><p>Create a Word contract, or add an existing Word file above.</p></div>');
 }
 function archiveDialog(jobId=null){
+  if(typeof archiveState!=='undefined')archiveState.uploadTarget=null;
+  $('#archive-edit-help').classList.add('hidden');$('#archive-edit-download').classList.add('hidden');
   state.archiveJob=jobId;state.archiveFile=null;$('#archive-form').reset();$('#archive-error').textContent='';$('#archive-file-name').textContent=t('No file selected');$('#save-archive-word').disabled=true;
   $('#archive-metadata').classList.toggle('hidden',!!jobId);
   $('#archive-dialog-title').textContent=jobId?t('Save a Word revision'):t('Add an existing Word contract');$('#archive-dialog').showModal();
@@ -338,7 +345,7 @@ document.addEventListener('click',async event=>{
   const start=event.target.closest('[data-new]');if(start){if(state.task){toast(t('Wait for the current step to finish.'));return;}newDialog(start.dataset.new);}
   const tab=event.target.closest('[data-tab]');if(tab&&state.job)setTab(tab.dataset.tab);
   const job=event.target.closest('[data-job]');if(job)openJob(job.dataset.job).catch(handleError);
-  const completed=event.target.closest('[data-open-completed]');if(completed)openJob(completed.dataset.openCompleted).catch(handleError);
+  const completed=event.target.closest('[data-open-completed]');if(completed&&!completed.dataset.editLatest)openJob(completed.dataset.openCompleted).catch(handleError);
   const revision=event.target.closest('[data-upload-revision]');if(revision)archiveDialog(revision.dataset.uploadRevision);
   const add=event.target.closest('[data-add-role]');if(add){state.role=add.dataset.addRole;chooseSource(state.role);}
   const sheet=event.target.closest('[data-sheet-source]');if(sheet)openSheet(sheet.dataset.sheetSource).catch(handleError);
@@ -367,7 +374,7 @@ $('#completed-kind').addEventListener('change',renderCompleted);
 $('#add-archived-word').addEventListener('click',()=>archiveDialog());
 $('#choose-archive-word').addEventListener('click',()=>$('#archive-picker').click());
 $('#archive-picker').addEventListener('change',event=>{const file=event.target.files[0];event.target.value='';if(!file)return;if(!file.name.toLowerCase().endsWith('.docx')||file.size>25*1024*1024){$('#archive-error').textContent=t('Choose a Word .docx file up to 25 MB.');return;}state.archiveFile=file;$('#archive-file-name').textContent=file.name;$('#archive-error').textContent='';if(!$('#archive-title').value)$('#archive-title').value=file.name.replace(/\.docx$/i,'');$('#save-archive-word').disabled=false;});
-$('#archive-form').addEventListener('submit',async event=>{event.preventDefault();if(!state.archiveFile)return;const button=$('#save-archive-word');button.disabled=true;try{const result=await api('/api/archive-word',{job:state.archiveJob,name:state.archiveFile.name,data:await encodedFile(state.archiveFile),title:$('#archive-title').value,kind:$('#archive-kind').value});if(state.job?.id===result.job.id)state.job=result.job;await refreshBootstrap();renderCompleted();$('#archive-dialog').close();toast(t('Word revision saved in Completed contracts.'));}catch(error){handleError(error);}finally{button.disabled=false;}});
+$('#archive-form').addEventListener('submit',async event=>{event.preventDefault();if(!state.archiveFile)return;const button=$('#save-archive-word');button.disabled=true;try{const result=await api('/api/archive-word',{job:state.archiveJob,name:state.archiveFile.name,data:await encodedFile(state.archiveFile),title:$('#archive-title').value,kind:$('#archive-kind').value,...(archiveState.uploadTarget?{replace_name:archiveState.uploadTarget.name,expected_sha:archiveState.uploadTarget.sha256}:{})});if(state.job?.id===result.job.id){state.job=result.job;renderJob();}await refreshArchive();$('#archive-dialog').close();toast(t('Word revision saved in Completed contracts.'));}catch(error){handleError(error);}finally{button.disabled=false;}});
 $('#identity-form').addEventListener('submit',async event=>{event.preventDefault();const button=$('#identity-form button[type=submit]');button.disabled=true;try{const result=await api('/api/identity-type',{ar:$('#identity-label-ar').value,en:$('#identity-label-en').value,verb_ar:$('#identity-verb').value,article_en:$('#identity-article').value});state.boot.identity_types=result.identity_types;state.job.fields.identity_type={value:result.identity_type.id,confirmed:false,evidence:[],origin:'chosen by you'};state.touched.add('identity_type');state.job.findings=[];delete state.job.checked_at;renderFields();updateCounts();queueSave();$('#identity-dialog').close();toast(t('Document type saved. It is available for future contracts.'));}catch(error){handleError(error);}finally{button.disabled=false;}});
 $('#template-picker').addEventListener('change',event=>{const file=event.target.files[0];event.target.value='';if(file)importTemplate(file,state.templateKind).catch(handleError);});
 $('#save-job').addEventListener('click',()=>saveJob(false).catch(handleError));
@@ -392,11 +399,13 @@ function refreshLanguage(){
   if(!state.archiveFile)$('#archive-file-name').textContent=t('No file selected');else $('#archive-file-name').textContent=state.archiveFile.name;
   $('#prev-page').textContent=isArabic()?'→':'←';$('#next-page').textContent=isArabic()?'←':'→';
   if(!state.boot)return;
-  $('#breadcrumb').textContent=t(({workspace:t('My workspace'),job:t('My workspace / Contract details'),completed:t('Completed contracts'),templates:t('Templates & rules'),setup:t('About & storage')})[state.view]);
+  $('#breadcrumb').textContent=t(({workspace:t('My workspace'),job:t('My workspace / Contract details'),completed:t('Completed contracts'),history:t('Contract history'),templates:t('Templates & rules'),setup:t('About & storage')})[state.view]);
   renderJobs();renderCompleted();renderTemplates();renderSetup();
   if(state.job){renderJob();renderViewer(state.viewerQuote||'');}
   if(state.template)showTemplateEditor(state.template);
   if(state.sheet&&$('#sheet-dialog').open)renderSheet();
+  if(typeof archiveState!=='undefined'&&archiveState.history)renderHistory();
+  if($('#tags-dialog').open)renderTagOptions();
   if(state.task){$('#task-title').textContent=message(state.taskDetails?.label||t('Working locally'));$('#task-message').textContent=message(state.taskDetails?.message||'');}
 }
 function switchLanguage(){
@@ -426,3 +435,105 @@ async function init(){
   catch(error){$('#job-list').innerHTML=ui('<div class="empty-state"><h3>The local app is starting</h3><p>Reload this window in a moment. Your files remain on this computer.</p></div>');handleError(error);}
 }
 init();
+
+// Saved versions and tags use the local archive APIs; no Word text is inferred.
+const archiveState={history:null,selection:null,tagGroup:null,selectedTags:new Set(),deleteTag:null,undo:null,uploadTarget:null};
+function dateTimeLabel(value){const date=new Date(value);return Number.isNaN(date.getTime())?t('Creation time unavailable'):date.toLocaleString(NMOI18n.locale(),{year:'numeric',month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});}
+function tagPills(ids){return ids.map(id=>(state.boot.tags||[]).find(tag=>tag.id===id)).filter(Boolean).map(tag=>ui`<button class="tag-pill" data-filter-tag="${tag.id}" data-tag-color="${tag.color}" dir="auto">${escapeHTML(tag.name)}</button>`).join('');}
+function colorTags(root=document){$$('[data-tag-color]',root).forEach(el=>{const color=el.dataset.tagColor;if(/^#[0-9a-f]{6}$/i.test(color)){el.style.setProperty('--tag-color',color);el.style.setProperty('--tag-tint',color+'20');}});}
+function renderCompleted(){
+  if(!state.boot?.history_enabled){$('#archive-organization').classList.add('hidden');return renderCompletedLegacy();}
+  $('#archive-organization').classList.remove('hidden');
+  const oldTag=$('#completed-tag').value;
+  $('#completed-tag').innerHTML=ui`<option value="">All tags</option><option value="__none__">Untagged</option>${(state.boot.tags||[]).map(tag=>ui`<option value="${tag.id}">${escapeHTML(tag.name)}</option>`).join('')}`;
+  if([...$('#completed-tag').options].some(option=>option.value===oldTag))$('#completed-tag').value=oldTag;
+  const query=$('#completed-search').value.trim().toLocaleLowerCase(),kind=$('#completed-kind').value,tag=$('#completed-tag').value,sort=$('#completed-sort').value;
+  let jobs=(state.boot.completed||[]).filter(job=>(!kind||job.by_kind?.[kind]||job.kind===kind)&&(!tag||(tag==='__none__'?!job.tag_ids?.length:job.tag_ids?.includes(tag))));
+  if(kind)jobs=jobs.map(job=>({...job,...job.by_kind?.[kind]}));
+  jobs=jobs.filter(job=>!query||(job.title+' '+job.latest_word+' '+(job.tag_ids||[]).map(id=>state.boot.tags?.find(t=>t.id===id)?.name||'').join(' ')).toLocaleLowerCase().includes(query));
+  const collator=new Intl.Collator(NMOI18n.locale(),{numeric:true,sensitivity:'base'});
+  const tagName=job=>(job.tag_ids||[]).map(id=>state.boot.tags?.find(t=>t.id===id)?.name||'').sort(collator.compare).join(' ');
+  jobs.sort((a,b)=>sort==='az'?collator.compare(a.title,b.title):sort==='za'?collator.compare(b.title,a.title):sort==='tags'?collator.compare(tagName(a),tagName(b))||collator.compare(a.title,b.title):sort==='oldest'?(a.created||'').localeCompare(b.created||''):sort==='newest'?(b.created||'').localeCompare(a.created||''):(b.updated||b.last_exported||'').localeCompare(a.updated||a.last_exported||''));
+  $('#completed-count').textContent=isArabic()?t('{count} contracts',{count:jobs.length}):`${jobs.length} ${jobs.length===1?'contract':'contracts'}`;
+  $('#completed-list').innerHTML=jobs.length?jobs.map(job=>ui`<article class="completed-card" data-contract-group="${job.group_id}"><button class="completed-icon history-opener" data-history-target="${job.group_id}" aria-label="${t('Double-click to open version history')}" title="${t('Double-click to open version history')}">▤</button><div class="completed-info"><span class="eyebrow">${escapeHTML(kindLabel(job.kind))}</span><h3><button class="history-name history-opener" data-history-target="${job.group_id}" dir="auto" title="${t('Double-click to open version history')}">${escapeHTML(job.title)}</button></h3><p>${isArabic()?t('{count} saved Word revisions',{count:job.word_count}):`${job.word_count} saved Word ${job.word_count===1?'revision':'revisions'}`}${job.has_changes?' · '+t('Draft changes saved'):''}</p><p class="contract-timestamp">${escapeHTML(t('Created: {date}',{date:dateTimeLabel(job.created)}))}</p><div class="tag-list">${tagPills(job.tag_ids||[])}</div><small dir="auto">${escapeHTML(job.latest_label||job.latest_word)}</small></div><div class="completed-actions"><a class="button primary" href="/api/file?job=${job.id}&name=${encodeURIComponent(job.latest_word)}&download=1">Download Word ↓</a><button class="button secondary" data-open-completed="${job.id}" data-edit-latest="${job.group_id}">Edit</button><div class="archive-card-links"><button class="inline-link" data-open-history="${job.group_id}">Versions</button><button class="inline-link" data-copy-latest="${job.group_id}">Duplicate</button><button class="inline-link" data-upload-revision="${job.id}">Save edited Word ↥</button></div></div></article>`).join(''):ui`<div class="empty-state completed-empty"><span>▤</span><h3>No matching contracts</h3><p>Try another name, tag or contract type.</p></div>`;
+  const trashed=state.boot.trashed||[];$('#archive-trash').classList.toggle('hidden',!trashed.length);$('#archive-trash-count').textContent=t('Trash ({count})',{count:trashed.reduce((n,g)=>n+g.count,0)});
+  $('#archive-trash-list').innerHTML=trashed.map(group=>ui`<button class="trash-group" data-open-history="${group.group_id}"><strong dir="auto">${escapeHTML(group.title)}</strong><span>${t('Trash ({count})',{count:group.count})}</span></button>`).join('');
+  colorTags($('#completed-list'));
+}
+async function openHistory(group){
+  if(state.task)throw new Error(t('Wait for the current step to finish.'));
+  if(state.job&&(state.unsaved||state.saving))await saveJob();
+  archiveState.history=await api('/api/history?group='+encodeURIComponent(group));
+  setView('history');renderHistory();
+}
+function renderHistory(){
+  const data=archiveState.history;if(!data)return;
+  $('#history-title').textContent=data.title;
+  $('#history-created').textContent=t('Created: {date}',{date:dateTimeLabel(data.created)});
+  $('#history-tags').innerHTML=tagPills(data.tag_ids||[]);colorTags($('#history-tags'));
+  const versions=data.versions.filter(v=>!v.deleted_at),deleted=data.versions.filter(v=>v.deleted_at);
+  $('#history-duplicate').disabled=!versions.length;
+  const row=(v,trash=false)=>ui`<article class="version-card ${trash?'trashed-version':''}"><div class="version-info"><div class="version-title"><h3>${t('Version {number}',{number:v.version})}</h3>${v.latest?ui`<span class="status-chip">Latest version</span>`:''}<span class="subtle">${escapeHTML(kindLabel(v.kind))}</span></div><p>${escapeHTML(t('Created: {date}',{date:dateTimeLabel(v.created)}))}${v.estimated_time?' · '+t('File creation time'):''}</p>${v.updated?ui`<p>${escapeHTML(t('Edited: {date}',{date:dateTimeLabel(v.updated)}))}</p>`:''}<small dir="auto">${escapeHTML(v.display_name||v.name)}</small>${v.origin==='duplicated'?ui`<span class="copy-label">Copied version</span>`:''}</div><div class="version-actions">${trash?ui`<button class="button secondary" data-version-action="restore" data-version-job="${v.job}" data-version-name="${escapeHTML(v.name)}">Restore</button>`:ui`<a class="button secondary" href="/api/file?job=${v.job}&name=${encodeURIComponent(v.name)}&download=1">Download Word ↓</a><button class="button secondary" data-version-action="edit" data-version-job="${v.job}" data-version-name="${escapeHTML(v.name)}">Edit</button><button class="button secondary" data-version-action="duplicate" data-version-job="${v.job}" data-version-name="${escapeHTML(v.name)}">Duplicate</button><button class="inline-link danger-link" data-version-action="delete" data-version-job="${v.job}" data-version-name="${escapeHTML(v.name)}">Delete</button>`}</div></article>`;
+  $('#history-versions').innerHTML=versions.map(v=>row(v)).join('')||ui`<div class="empty-state"><h3>No active versions</h3><p>You can restore versions from Trash below.</p></div>`;
+  $('#history-deleted').innerHTML=deleted.map(v=>row(v,true)).join('');$('#history-trash-count').textContent=t('Trash ({count})',{count:deleted.length});$('#history-trash').classList.toggle('hidden',!deleted.length);
+  if(archiveState.undo)$('#history-feedback').innerHTML=ui`<div class="history-notice">Version moved to trash. <button class="inline-link" id="undo-version-delete">Undo</button></div>`;else $('#history-feedback').innerHTML='';
+}
+function latestHistoryVersion(group){return api('/api/history?group='+encodeURIComponent(group)).then(data=>{archiveState.history=data;const version=data.versions.find(v=>v.latest);if(!version)throw new Error(t('No active versions'));return version;});}
+function selectVersion(job,name){return archiveState.history?.versions.find(v=>v.job===job&&v.name===name);}
+function describeVersion(v){return t('Version {number} · {date}',{number:v.version,date:dateTimeLabel(v.created)});}
+function duplicateDialog(version){archiveState.selection=version;$('#duplicate-mode').value='separate';$('#duplicate-description').textContent=describeVersion(version);$('#duplicate-error').textContent='';$('#duplicate-dialog').showModal();}
+function recentDuplicate(version){return !!version.duplicated_at&&new Date(version.duplicated_at).toDateString()===new Date().toDateString();}
+async function requestVersionEdit(version){
+  archiveState.selection=version;
+  if(recentDuplicate(version))return beginVersionEdit(version,'replace');
+  $('#edit-version-mode').value='copy';$('#edit-version-description').textContent=describeVersion(version);$('#edit-version-error').textContent='';$('#edit-version-dialog').showModal();
+}
+async function beginVersionEdit(version,mode){
+  if(!version.can_edit_fields){
+    let target=version;
+    if(mode==='copy'){const result=await api('/api/version-duplicate',{job:version.job,name:version.name,mode:'same_person'});target={...version,job:result.job.id,name:result.job.outputs[0]};}
+    archiveDialog(target.job);archiveState.uploadTarget=target;$('#archive-dialog-title').textContent=t('Upload the edited Word version');$('#archive-edit-help').classList.remove('hidden');$('#archive-edit-download').classList.remove('hidden');$('#archive-edit-download').href='/api/file?job='+target.job+'&name='+encodeURIComponent(target.name)+'&download=1';
+    return;
+  }
+  const result=await api('/api/version-edit',{job:version.job,name:version.name,mode});await openJob(result.job.id);
+}
+async function refreshArchive(){await refreshBootstrap();renderCompleted();if(archiveState.history){archiveState.history=await api('/api/history?group='+encodeURIComponent(archiveState.history.group_id));renderHistory();}}
+function openTags(group=null){
+  archiveState.tagGroup=group;const contract=state.boot.completed?.find(job=>job.group_id===group);
+  archiveState.selectedTags=new Set(contract?.tag_ids||(archiveState.history?.group_id===group?archiveState.history.tag_ids:[]));
+  resetTagEditor();renderTagOptions();$('#tag-error').textContent='';$('#apply-tags').classList.toggle('hidden',!group);$('#tags-dialog').showModal();
+}
+function resetTagEditor(){$('#tag-form').reset();$('#tag-id').value='';$('#tag-color').value='#176f78';}
+function renderTagOptions(){
+  $('#tag-options').innerHTML=(state.boot.tags||[]).map(tag=>ui`<div class="tag-option"><label>${archiveState.tagGroup?ui`<input type="checkbox" data-select-tag="${tag.id}" ${archiveState.selectedTags.has(tag.id)?'checked':''}>`:''}<span class="tag-pill" data-tag-color="${tag.color}" dir="auto">${escapeHTML(tag.name)}</span></label><div><button type="button" class="inline-link" data-edit-tag="${tag.id}">Edit</button><button type="button" class="inline-link danger-link" data-delete-tag="${tag.id}">Delete</button></div></div>`).join('')||ui`<p class="subtle">No tags yet. Create your first tag below.</p>`;
+  colorTags($('#tag-options'));
+}
+async function versionDelete(version){archiveState.selection=version;$('#delete-version-description').textContent=describeVersion(version);$('#delete-version-error').textContent='';$('#delete-version-dialog').showModal();}
+async function restoreVersion(version){archiveState.history=await api('/api/version-restore',{job:version.job,name:version.name});archiveState.undo=null;await refreshArchive();toast(t('Version restored.'));}
+function downloadLatestWord(){const name=state.job?.outputs?.at(-1);if(!name)return;const anchor=document.createElement('a');anchor.href='/api/file?job='+encodeURIComponent(state.job.id)+'&name='+encodeURIComponent(name)+'&download=1';anchor.download=name;document.body.append(anchor);anchor.click();anchor.remove();}
+
+$('#completed-tag').addEventListener('change',renderCompleted);$('#completed-sort').addEventListener('change',renderCompleted);
+$('#manage-tags').addEventListener('click',()=>openTags());$('#history-manage-tags').addEventListener('click',()=>openTags(archiveState.history.group_id));
+$('#back-completed').addEventListener('click',()=>refreshBootstrap().then(()=>setView('completed')).catch(handleError));
+$('#history-duplicate').addEventListener('click',()=>{const latest=archiveState.history?.versions.find(v=>v.latest);if(latest)duplicateDialog(latest);});
+document.addEventListener('dblclick',event=>{const target=event.target.closest('[data-history-target]');if(target)openHistory(target.dataset.historyTarget).catch(handleError);});
+document.addEventListener('pointerup',event=>{const target=event.target.closest('[data-history-target]');if(target&&event.pointerType==='touch')openHistory(target.dataset.historyTarget).catch(handleError);});
+document.addEventListener('click',event=>{
+  const history=event.target.closest('[data-open-history]');if(history)openHistory(history.dataset.openHistory).catch(handleError);
+  const accessible=event.target.closest('[data-history-target]');if(accessible&&event.detail===0)openHistory(accessible.dataset.historyTarget).catch(handleError);
+  const latestEdit=event.target.closest('[data-edit-latest]');if(latestEdit)latestHistoryVersion(latestEdit.dataset.editLatest).then(requestVersionEdit).catch(handleError);
+  const latestCopy=event.target.closest('[data-copy-latest]');if(latestCopy)latestHistoryVersion(latestCopy.dataset.copyLatest).then(duplicateDialog).catch(handleError);
+  const action=event.target.closest('[data-version-action]');if(action){const version=selectVersion(action.dataset.versionJob,action.dataset.versionName);if(!version)return;const perform={edit:requestVersionEdit,duplicate:duplicateDialog,delete:versionDelete,restore:restoreVersion}[action.dataset.versionAction];Promise.resolve(perform(version)).catch(handleError);}
+  if(event.target.closest('#undo-version-delete')&&archiveState.undo)restoreVersion(archiveState.undo).catch(handleError);
+  const tagFilter=event.target.closest('[data-filter-tag]');if(tagFilter){$('#completed-tag').value=tagFilter.dataset.filterTag;setView('completed');}
+  const editTag=event.target.closest('[data-edit-tag]');if(editTag){const tag=state.boot.tags.find(t=>t.id===editTag.dataset.editTag);$('#tag-id').value=tag.id;$('#tag-name').value=tag.name;$('#tag-color').value=tag.color;}
+  const deleteTag=event.target.closest('[data-delete-tag]');if(deleteTag){archiveState.deleteTag=deleteTag.dataset.deleteTag;$('#delete-tag-name').textContent=state.boot.tags.find(t=>t.id===archiveState.deleteTag).name;$('#delete-tag-dialog').showModal();}
+});
+document.addEventListener('change',event=>{if(event.target.dataset.selectTag){if(event.target.checked)archiveState.selectedTags.add(event.target.dataset.selectTag);else archiveState.selectedTags.delete(event.target.dataset.selectTag);}});
+$('#duplicate-form').addEventListener('submit',async event=>{event.preventDefault();const button=$('#duplicate-form button[type=submit]');button.disabled=true;try{const selected=archiveState.selection;const result=await api('/api/version-duplicate',{job:selected.job,name:selected.name,mode:$('#duplicate-mode').value});$('#duplicate-dialog').close();await refreshBootstrap();const version={...selected,job:result.job.id,name:result.job.outputs[0],duplicated_at:result.job.revisions[0].created};await beginVersionEdit(version,'replace');toast(t('Version duplicated. Review the copied details before saving.'));}catch(error){$('#duplicate-error').textContent=message(error.message);handleError(error);}finally{button.disabled=false;}});
+$('#edit-version-form').addEventListener('submit',async event=>{event.preventDefault();const button=$('#edit-version-form button[type=submit]');button.disabled=true;try{await beginVersionEdit(archiveState.selection,$('#edit-version-mode').value);$('#edit-version-dialog').close();}catch(error){$('#edit-version-error').textContent=message(error.message);handleError(error);}finally{button.disabled=false;}});
+$('#delete-version-form').addEventListener('submit',async event=>{event.preventDefault();const version=archiveState.selection;try{archiveState.history=await api('/api/version-delete',{job:version.job,name:version.name});archiveState.undo=version;$('#delete-version-dialog').close();await refreshArchive();}catch(error){$('#delete-version-error').textContent=message(error.message);handleError(error);}});
+$('#tag-form').addEventListener('submit',async event=>{event.preventDefault();try{const isNew=!$('#tag-id').value,label=$('#tag-name').value.trim();const result=await api('/api/tag-save',{id:$('#tag-id').value||undefined,name:label,color:$('#tag-color').value});state.boot.tags=result.tags;if(isNew&&archiveState.tagGroup){const added=result.tags.find(tag=>tag.name===label);if(added)archiveState.selectedTags.add(added.id);}resetTagEditor();renderTagOptions();renderCompleted();if(archiveState.history)renderHistory();$('#tag-error').textContent='';}catch(error){$('#tag-error').textContent=message(error.message);}});
+$('#reset-tag').addEventListener('click',resetTagEditor);
+$('#apply-tags').addEventListener('click',async()=>{try{await api('/api/group-tags',{group:archiveState.tagGroup,tags:[...archiveState.selectedTags]});$('#tags-dialog').close();await refreshArchive();}catch(error){$('#tag-error').textContent=message(error.message);}});
+$('#delete-tag-form').addEventListener('submit',async event=>{event.preventDefault();try{const result=await api('/api/tag-delete',{id:archiveState.deleteTag});state.boot.tags=result.tags;archiveState.selectedTags.delete(archiveState.deleteTag);$('#delete-tag-dialog').close();renderTagOptions();await refreshArchive();}catch(error){handleError(error);}});

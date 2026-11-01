@@ -20,6 +20,7 @@ from .fields import FIELDS,FIELD_KEYS,empty_fields,required_fields
 from .checks import check_fields,calculations
 from .spreadsheets import read_workbook,row_import,suggested_mapping,column_index
 from . import store
+from . import archive
 from .readers import read_file,page_image
 from .templates import registry,generate,template_requirements
 from . import __version__
@@ -47,7 +48,12 @@ def full_job(job_id):
     job['source_details']=[public_source(store.get_source(s)) for s in job.get('sources',[])]
     job['calculations']=calculations(job['fields'])
     job['outputs']=[name for name in job.get('outputs',[]) if name.lower().endswith('.docx')]
-    job['validation']=check_fields(job['fields'],registry().get(job['fields']['contract_type']['value'],{}),rules())
+    try:entry=archive.generation_template(job) if job.get('template_reference') else registry().get(job['fields']['contract_type']['value'],{})
+    except ValueError as error:
+        job['template_warning']=str(error);entry=registry().get(job['fields']['contract_type']['value'],{})
+    job['validation']=check_fields(job['fields'],entry,rules())
+    job['template_required_fields']=sorted(template_requirements(entry))
+    job['output_labels']=archive.output_labels(job)
     return job
 
 def sheet_source(job_id,source_id):
@@ -103,14 +109,14 @@ def save_input_fields(job,payload):
     return job
 
 def store_word_revision(job,raw,source_name,origin):
-    revision=1+sum(n.lower().endswith('.docx') for n in job.get('outputs',[]))
+    revision=archive.next_revision(job)
     stem=re.sub(r'[\\/:*?"<>|\x00-\x1f]','-',Path(source_name).stem).strip()[:110] or 'Contract'
     name=f'{stem} - v{revision}.docx'
     folder=DATA/'outputs'/job['id'];folder.mkdir(parents=True,exist_ok=True)
     (folder/name).write_bytes(raw)
     job['outputs'].append(name);job['last_exported']=store.now()
     job['last_exported_title']=job['title']
-    job.setdefault('revisions',[]).append({'name':name,'number':revision,'created':job['last_exported'],'origin':origin,'sha256':hashlib.sha256(raw).hexdigest()})
+    job.setdefault('revisions',[]).append({'name':name,'number':revision,'created':job['last_exported'],'origin':origin,'sha256':hashlib.sha256(raw).hexdigest(),'fields_snapshot':None,'kind':job['fields']['contract_type']['value'],'title':job['title']})
     job['last_word_origin']=origin
     return name
 
@@ -173,9 +179,10 @@ class Handler(BaseHTTPRequestHandler):
             if not self.authenticated():
                 return self.respond({'error':'Open NMO Contract Maker in its own window first.'},403)
             if route=='/api/bootstrap':
-                return self.respond({'csrf':CSRF,'jobs':store.jobs(),'completed':store.completed(),'identity_types':catalog(),'fields':FIELDS,'templates':{k:{**{a:b for a,b in v.items() if a in {'label','sha256','placeholders','ready','version','source_name','saved_at'}},'history_count':len(v.get('history',[])),'required_fields':sorted(template_requirements(v)|required_fields(k))} for k,v in registry().items()},'generation_only':True,'requires_models':False,'word_only':True,'rules':rules(),'version':__version__})
+                return self.respond({'csrf':CSRF,'jobs':store.jobs(),'completed':store.completed(),'history_enabled':True,'trashed':archive.trashed(),'tags':archive.tags(),'identity_types':catalog(),'fields':FIELDS,'templates':{k:{**{a:b for a,b in v.items() if a in {'label','sha256','placeholders','ready','version','source_name','saved_at'}},'history_count':len(v.get('history',[])),'required_fields':sorted(template_requirements(v)|required_fields(k))} for k,v in registry().items()},'generation_only':True,'requires_models':False,'word_only':True,'rules':rules(),'version':__version__})
             if route=='/api/job':return self.respond(full_job(arg('id')))
             if route=='/api/completed':return self.respond(store.completed())
+            if route=='/api/history':return self.respond(archive.history(arg('group')))
             if route=='/api/sheet':
                 job,source,sheets=sheet_source(arg('job'),arg('source'))
                 index=int(arg('sheet','0'))
@@ -205,7 +212,8 @@ class Handler(BaseHTTPRequestHandler):
                 job=store.get_job(arg('job'));name=arg('name')
                 if name not in job.get('outputs',[]) or not name.lower().endswith('.docx'):raise ValueError('Word output not found.')
                 p=DATA/'outputs'/job['id']/name
-                return self.binary(p.read_bytes(),mimetypes.guess_type(name)[0] or 'application/octet-stream',name if arg('download')=='1' else None)
+                download_name=archive.output_labels(job).get(name,name)
+                return self.binary(p.read_bytes(),mimetypes.guess_type(name)[0] or 'application/octet-stream',download_name if arg('download')=='1' else None)
             if route=='/api/bundle':
                 job=store.get_job(arg('job'));buffer=BytesIO()
                 with ZipFile(buffer,'w',ZIP_DEFLATED) as z:
@@ -243,10 +251,26 @@ class Handler(BaseHTTPRequestHandler):
             payload=json.loads(self.rfile.read(length))
             if not isinstance(payload,dict):raise ValueError('Invalid request.')
             route=urlparse(self.path).path
-            if payload.get('job') and route in {'/api/save','/api/import','/api/sheet-import','/api/check','/api/generate','/api/archive-word'}:
+            if payload.get('job') and route in {'/api/save','/api/import','/api/sheet-import','/api/check','/api/generate','/api/archive-word','/api/version-edit','/api/version-duplicate','/api/version-delete','/api/version-restore'}:
                 with TASK_LOCK:
                     if any(t.get('job')==payload['job'] and t['status']=='running' for t in TASKS.values()):
                         raise ValueError('Wait for this workspace operation to finish before changing its details.')
+            if route in {'/api/version-edit','/api/version-duplicate','/api/version-delete','/api/version-restore'}:
+                source=store.get_job(payload['job']);person=archive.group_id(source)
+                siblings={member['id'] for member in archive.members(person)}
+                with TASK_LOCK:
+                    if any(t.get('job') in siblings and t['status']=='running' for t in TASKS.values()):
+                        raise ValueError('Wait for this workspace operation to finish before changing its details.')
+                if route=='/api/version-edit':
+                    copied=archive.edit_version(payload['job'],payload['name'],payload.get('mode','copy'))
+                    return self.respond({'job':full_job(copied['id'])})
+                if route=='/api/version-duplicate':
+                    copied=archive.duplicate(payload['job'],payload['name'],payload.get('mode','separate'))
+                    return self.respond({'job':full_job(copied['id'])})
+                return self.respond(archive.delete_version(payload['job'],payload['name'],route=='/api/version-restore'))
+            if route=='/api/tag-save':return self.respond({'tags':archive.save_tag(payload.get('name',''),payload.get('color',''),payload.get('id'))})
+            if route=='/api/tag-delete':return self.respond({'tags':archive.delete_tag(payload['id'])})
+            if route=='/api/group-tags':return self.respond(archive.assign_tags(payload['group'],payload.get('tags',[])))
             if route=='/api/new':
                 if payload.get('mode','create')!='create':raise ValueError('This app creates contracts only.')
                 fields=empty_fields();kind=payload.get('kind','employment')
@@ -279,6 +303,9 @@ class Handler(BaseHTTPRequestHandler):
                     values=empty_fields();values['contract_type'].update(value=kind,confirmed=True,origin='chosen by you')
                     title=str(payload.get('title') or Path(name).stem).strip()[:200]
                     job={'id':uuid.uuid4().hex,'title':title,'mode':'create','archive_only':True,'fields':values,'sources':[],'findings':[],'outputs':[],'created':store.now()}
+                if payload.get('replace_name'):
+                    archive.replace_uploaded_version(job['id'],payload['replace_name'],raw,payload.get('expected_sha'))
+                    return self.respond({'job':full_job(job['id'])})
                 filename=store_word_revision(job,raw,name,'uploaded_word')
                 store.save_job(job);store.audit(job['id'],'word_revision_uploaded',{'file':filename,'sha256':hashlib.sha256(raw).hexdigest()})
                 return self.respond({'job':full_job(job['id'])})
@@ -330,13 +357,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond({'ok':True})
             if route=='/api/check':
                 job=save_input_fields(store.get_job(payload['job']),payload)
-                job['findings']=check_fields(job['fields'],registry().get(job['fields']['contract_type']['value'],{}),rules())
+                entry=archive.generation_template(job) if job.get('template_reference') else registry().get(job['fields']['contract_type']['value'],{})
+                job['findings']=check_fields(job['fields'],entry,rules())
                 job['checked_at']=store.now()
                 store.save_job(job)
                 return self.respond({'findings':job['findings'],'calculations':calculations(job['fields']),'checked_at':job['checked_at']})
             if route=='/api/generate':
                 job=save_input_fields(store.get_job(payload['job']),payload);job_id=job['id']
-                template_entry,_=template_manager.active(job['fields']['contract_type']['value'],payload.get('template_sha'))
+                template_entry=archive.generation_template(job,payload.get('template_sha'))
                 problems=check_fields(job['fields'],template_entry,rules(),confirmed=True)
                 errors=[p for p in problems if p['level']=='error']
                 if errors:return self.respond({'error':'Complete and confirm the required fields first.','findings':errors},400)
@@ -353,7 +381,7 @@ class Handler(BaseHTTPRequestHandler):
                     if not template or not Path(template).exists():raise ValueError('Prepare this template in Templates before generating a contract.')
                     if hashlib.sha256(Path(template).read_bytes()).hexdigest()!=entry['sha256']:raise ValueError('The template has changed outside the app. Re-import it before generation.')
                     # Protect previous output revisions instead of overwriting them.
-                    revision=1+sum(name.lower().endswith('.docx') for name in job['outputs'])
+                    revision=archive.next_revision(job)
                     name=job['fields']['name_ar']['value'] or job['fields']['name_en']['value']
                     name=re.sub(r'[\\/:*?"<>|\x00-\x1f]','-',name).strip()[:120]
                     prefix={'employment':'عقد عمل','service':'عقد خدمة','extension':'خطاب تمديد'}[kind]
@@ -372,8 +400,11 @@ class Handler(BaseHTTPRequestHandler):
                     (records/f'revision-{revision}.json').write_text(json.dumps(verification,ensure_ascii=False,indent=2))
                     job['outputs'].append(docx.name);job['findings']=warnings;job['archive_only']=False
                     job['last_exported']=store.now();job['last_exported_title']=job['title'];job['last_word_origin']='generated'
-                    job.setdefault('revisions',[]).append({'name':docx.name,'number':revision,'created':job['last_exported'],'origin':'generated','sha256':verification['sha256']})
-                    job['last_generation']=verification;store.save_job(job)
+                    job.setdefault('revisions',[]).append({'name':docx.name,'number':revision,'created':job['last_exported'],'origin':'generated','sha256':verification['sha256'],'fields_snapshot':deepcopy(job['fields']),'source_ids':deepcopy(job['sources']),'kind':kind,'title':job['title'],'template_snapshot':deepcopy(verification['template'])})
+                    job['last_generation']=verification
+                    with REQUEST_LOCK:
+                        archive.replace_edited_version(job,docx,verification)
+                        store.save_job(job)
                     store.audit(job_id,'contract_generated',{'revision':revision,'outputs':[docx.name],'verification':{k:v for k,v in verification.items() if k not in {'confirmed_fields','sources','spreadsheet_imports'}}})
                     return {'job':job_id}
                 return self.respond(run_task('Creating contract',generate_work,job_id))

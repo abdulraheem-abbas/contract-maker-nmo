@@ -34,7 +34,18 @@ Employment contracts use a job title without its project name and a reporting-ma
 
 The document selector includes ID cards, national-number IDs, passports, refugee cards, asylum-seeker cards and residence cards. Choose **Add my own document type** in the selector to save a bilingual label and its Arabic/English grammar choices. Custom types stay in the local `data/identity-types.json` file and are available for future contracts. Selecting a document type does not infer an employee’s nationality.
 
-## Completed contracts
+## Completed contracts and version history
+
+Double-click a saved contract’s name or icon, or choose **Versions**, to open its history. Each version shows its creation date/time and offers download, edit, duplicate and delete. Deleted versions go to local Trash and can be restored, including when every version for a person was deleted.
+
+Choose any historical version to duplicate. **Inside this person’s history** makes a renewal copy under that person. **Separate editable copy** creates an independent entry for another employee. Only the selected Word version and its saved details are copied; other versions are not copied. Review identity details and confirm the copied fields before generating. A separate copy initially inherits the source tags.
+
+Editing offers **Update this version** or **As a new copy**. Updating keeps the creation time and adds an edited time; a private undo backup is retained locally. A duplicate created on the same local calendar day opens directly in update mode. Imported Word versions without saved form details are edited in Word and uploaded through the same choice.
+
+Copies use the source version’s saved form snapshot and retained template version where available. Changing contract type uses that type’s configured template. The app does not reconstruct missing employee values from Word text.
+
+Create Word downloads the result automatically. Your files shows the latest result, with earlier versions under an expandable list. Colored, named tags can be created, renamed and recolored; use the tag filter and sorting by update time, creation time, A–Z, Z–A or tags alongside the contract-type filter.
+
 
 **Completed contracts** keeps every Word export. Search by employee or file name, filter by contract type, download the latest Word, or choose **Edit saved details** to change the form and export a new revision. Older Word revisions remain under the contract’s **Your files** tab. Changes to an exported contract’s form are marked as a saved draft until a new Word revision is created.
 

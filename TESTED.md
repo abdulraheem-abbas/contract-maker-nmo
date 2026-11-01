@@ -1,8 +1,10 @@
-# Mac checks · version 1.2 · 1 November 2026
+# Mac checks · version 1.3 · 1 November 2026
 
 This separate contract-creation app was checked on the Apple M1 Mac using fictional employee details. The AI-assisted application and its repository were kept separate.
 
-- 63 automated tests passed with the private templates configured locally. They cover dates, weekdays, salary precision, identity types, leading zeros, confirmation, saved role rules, template preservation, versioned template changes, spreadsheet imports and local-only requests. Three private-template tests skip on a source-only clone.
+- 74 automated tests passed with the private templates configured locally. They cover dates, weekdays, salary precision, identity types, leading zeros, confirmation, saved role rules, template preservation, versioned template changes, spreadsheet imports and local-only requests. Three private-template tests skip on a source-only clone.
+- Archive checks recovered legacy per-version snapshots, copied an older start date and salary into separate and same-person copies, updated a duplicate without altering its source, preserved creation timestamps, restored deleted versions, and retained template versions after a template change. Conflicting edits were rejected. Tags persisted through rename, recolor, copy and removal.
+- The archive browser workflow exercised name/icon double-click, the edit/copy choices, same-day duplicate behavior, automatic downloads, collapsed earlier versions, trash/undo, tag colors and filters, and A–Z/Z–A ordering in English and Arabic, including a narrow viewport.
 - Manual browser entry produced Word only without uploading source documents. No PDF or JSON appears in output downloads; internal records remain local. Arabic fields used right-to-left input and English fields used left-to-right input. The calculated weekday and inclusive contract period matched the entered dates.
 - Spreadsheet browser import selected row 3 explicitly. Its leading-zero identity number was preserved and imported values remained unconfirmed. Unit checks covered CSV, ODS, XLSX, Excel date systems, ambiguous dates, cached formulas, conflicting employee names, keeping existing fields, source membership and changed source copies.
 - Imported reference images were available for viewing and did not fill any employee fields. No model engine, OCR or contract-review route is present.

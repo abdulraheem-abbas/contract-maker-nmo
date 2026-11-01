@@ -14,7 +14,7 @@ On your computer|على جهازك
 Documents, rules and history|المستندات والقواعد والسجل
 stay in your local workspace.|محفوظة على جهازك.
 Quit app|إغلاق التطبيق
-CONTRACT MAKER · 1.2|صانع العقود · 1.2
+CONTRACT MAKER · 1.3|صانع العقود · 1.3
 Local processing|معالجة محلية
 Word contracts|عقود Word
 Templates & rules|القوالب والقواعد
@@ -475,6 +475,97 @@ Failed to fetch|تعذّر الاتصال بالتطبيق المحلي. تأك�
 Load failed|تعذّر الاتصال بالتطبيق المحلي. تأكّد من أنه يعمل ثم حاول مجددًا.
 This workspace was not found.|لم يُعثر على مساحة العمل هذه.
 Source not found.|لم يُعثر على المستند المرجعي.
+Tags|الوسوم
+All tags|كل الوسوم
+Untagged|بدون وسوم
+Sort by|الترتيب حسب
+Recently updated|آخر تحديث
+Created · newest first|تاريخ الإنشاء · الأحدث أولًا
+Created · oldest first|تاريخ الإنشاء · الأقدم أولًا
+Name · A–Z|الاسم · تصاعدي
+Name · Z–A|الاسم · تنازلي
+Manage tags|إدارة الوسوم
+Edit tags|تعديل الوسوم
+CONTRACT HISTORY|سجل نسخ العقد
+Contract history|سجل نسخ العقد
+← Completed contracts|→ العقود المكتملة
+Duplicate latest version|نسخ أحدث نسخة
+Choose a saved version to download, edit or duplicate. Each version keeps its own saved details.|اختر نسخة محفوظة لتنزيلها أو تعديلها أو نسخها. لكل نسخة بياناتها المحفوظة.
+COPY A SAVED VERSION|نسخ عقد محفوظ
+Duplicate this version|إنشاء نسخة من هذا العقد
+Where should the copy go?|أين تريد حفظ النسخة؟
+Inside this person’s history|داخل سجل الشخص نفسه
+Separate editable copy|نسخة مستقلة قابلة للتعديل
+Only the selected version is copied, with its dates, supervisor and other saved details. Review the name and identity details when using it for another employee.|تُنسخ النسخة المختارة فقط بتواريخها وبيانات المشرف وبقية بياناتها المحفوظة. راجع الاسم وبيانات الهوية عند استخدامها لموظف آخر.
+Duplicate and edit|نسخ وتعديل
+EDIT A SAVED VERSION|تعديل نسخة محفوظة
+How should these edits be saved?|كيف تريد حفظ التعديلات؟
+Save edits|حفظ التعديلات
+As a new copy inside this person’s history|كنسخة جديدة داخل سجل الشخص نفسه
+Update this version|تحديث هذه النسخة
+Updating keeps the version’s creation date. Saving a copy keeps the original unchanged.|يحافظ التحديث على تاريخ إنشاء النسخة، وتبقى النسخة الأصلية كما هي عند الحفظ كنسخة جديدة.
+Continue to edit|متابعة التعديل
+Move this version to trash?|نقل هذه النسخة إلى المحذوفات؟
+You can undo this or restore it from Trash. Other versions stay saved.|يمكنك التراجع أو استعادة النسخة من المحذوفات. تبقى بقية النسخ محفوظة.
+Move to trash|نقل إلى المحذوفات
+ORGANIZE YOUR CONTRACTS|تنظيم عقودك
+Named color tags|وسوم بأسماء وألوان
+Give each tag a name and color. Use tags to organize, filter and sort your contracts.|اختر اسمًا ولونًا لكل وسم، واستخدم الوسوم لتنظيم عقودك وتصفيتها وترتيبها.
+Tag name|اسم الوسم
+Color|اللون
+Save tag|حفظ الوسم
+New tag|وسم جديد
+Apply tags|تطبيق الوسوم
+Delete this tag?|حذف هذا الوسم؟
+The tag will be removed from your contracts. Contract files and versions stay saved.|سيُزال الوسم من عقودك. تبقى ملفات العقود ونسخها محفوظة.
+Delete tag|حذف الوسم
+Double-click to open version history|انقر مرتين لفتح سجل النسخ
+Created: {date}|تاريخ الإنشاء: {date}
+Edited: {date}|آخر تعديل: {date}
+Creation time unavailable|وقت الإنشاء غير متاح
+File creation time|وقت إنشاء الملف
+Draft changes saved|تعديلات المسودة محفوظة
+No matching contracts|لا توجد عقود مطابقة
+Try another name, tag or contract type.|جرّب اسمًا أو وسمًا أو نوع عقد آخر.
+Edit|تعديل
+Versions|النسخ
+Duplicate|نسخ
+Delete|حذف
+Version {number}|النسخة {number}
+Version {number} · {date}|النسخة {number} · {date}
+Latest version|أحدث نسخة
+Copied version|نسخة منسوخة
+Restore|استعادة
+Trash|المحذوفات
+Trash ({count})|المحذوفات ({count})
+No active versions|لا توجد نسخ محفوظة حاليًا
+You can restore versions from Trash below.|يمكنك استعادة النسخ من المحذوفات أدناه.
+Version moved to trash.|نُقلت النسخة إلى المحذوفات.
+Undo|تراجع
+Version restored.|استُعيدت النسخة.
+Version duplicated. Review the copied details before saving.|أُنشئت النسخة. راجع البيانات المنسوخة قبل الحفظ.
+No tags yet. Create your first tag below.|لا توجد وسوم بعد. أنشئ أول وسم أدناه.
+Upload the edited Word version|رفع نسخة Word المعدّلة
+Save version & download|حفظ النسخة وتنزيلها
+Updating Version {number}. Other versions stay saved.|تحديث النسخة {number}. تبقى بقية النسخ محفوظة.
+Editing a new copy of Version {number}. The original stays saved.|تعديل نسخة جديدة من النسخة {number}. تبقى الأصلية محفوظة.
+Earlier versions ({count})|النسخ السابقة ({count})
+This contract history was not found.|لم يُعثر على سجل هذا العقد.
+Choose an available Word version.|اختر نسخة Word متاحة.
+This Word version could not be found.|لم يُعثر على نسخة Word هذه.
+This Word version changed outside the app. Upload it as a new version before copying its saved details.|تغيّرت نسخة Word خارج التطبيق. ارفعها كنسخة جديدة قبل نسخ بياناتها المحفوظة.
+Choose where to duplicate this version.|اختر مكان حفظ النسخة.
+This version has no saved form details. Edit its Word file and upload the edited version.|لا توجد بيانات نموذج محفوظة لهذه النسخة. عدّل ملف Word ثم ارفع النسخة المعدّلة.
+Choose how to save the edited version.|اختر طريقة حفظ النسخة المعدّلة.
+This version changed while you were editing it. Start a new copy from its history.|تغيّرت هذه النسخة أثناء تعديلها. ابدأ نسخة جديدة من سجلها.
+Use a tag name between 1 and 60 characters.|اكتب اسم وسم من 1 إلى 60 حرفًا.
+Choose a valid tag color.|اختر لونًا صالحًا للوسم.
+This tag was not found.|لم يُعثر على هذا الوسم.
+A tag with this name already exists.|يوجد وسم بهذا الاسم بالفعل.
+Choose available tags.|اختر وسومًا متاحة.
+The original template for this version is unavailable. Edit its Word file and upload the result instead.|القالب الأصلي لهذه النسخة غير متاح. عدّل ملف Word وارفع النتيجة بدلًا من ذلك.
+Download this version, edit it in Word, then choose the edited file below.|نزّل هذه النسخة وعدّلها في Word، ثم اختر الملف المعدّل أدناه.
+Download this version|تنزيل هذه النسخة
 `.trim().split('\n').map(line=>line.split('|'));
  const ar=Object.fromEntries(entries);
  const locale=()=>language==='ar'?'ar-YE-u-nu-latn':'en-GB';
