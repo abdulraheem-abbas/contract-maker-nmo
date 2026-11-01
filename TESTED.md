@@ -1,0 +1,16 @@
+# Mac checks · 1 November 2026
+
+This separate contract-creation app was checked on the Apple M1 Mac using fictional employee details. The AI-assisted application and its repository were kept separate.
+
+- 50 automated tests passed with the private templates configured locally. They cover dates, weekdays, salary precision, identity types, leading zeros, confirmation, saved role rules, template preservation, versioned template changes, spreadsheet imports and local-only requests. Three private-template tests skip on a source-only clone.
+- Manual browser entry produced Word, PDF and evidence files without uploading source documents. Arabic fields used right-to-left input and English fields used left-to-right input. The calculated weekday and inclusive contract period matched the entered dates.
+- Spreadsheet browser import selected row 3 explicitly. Its leading-zero identity number was preserved and imported values remained unconfirmed. Unit checks covered CSV, ODS, XLSX, Excel date systems, ambiguous dates, cached formulas, conflicting employee names, keeping existing fields, source membership and changed source copies.
+- Imported reference images were available for viewing and did not fill any employee fields. No model engine, OCR or contract-review route is present.
+- Template replacement remained a draft until activation. Local page-image preview, activation and restoration passed through the browser.
+- The configured private templates produced 16-page employment, 3-page service and 2-page extension PDFs using fictional details. Fixed text and Word parts outside the filled document body were preserved. No nearly empty page was detected; service and extension signature pages were inspected visually.
+- The standalone Mac application passed the same fictional browser/import/export/template workflow. It runs without an AI model or engine and has a separate browser-session cookie.
+- The macOS outbound restriction denied an external dummy connection while allowing a loopback connection.
+- Desktop and narrow-width browser checks found no JavaScript errors, failed requests, external requests or horizontal page overflow. NMO colors were retained.
+- Invalid origins, old application cookies and mutations during a running workspace operation were refused. Generation required field confirmation and separate acknowledgement for expired identity details.
+
+Local evidence, screenshots and fictional exports are kept under the ignored `test-results` folder. These checks demonstrate the tested behavior; they do not guarantee source-record accuracy, translation, legal interpretation or identical wrapping for every future field length. Inspect each final PDF before using it.
