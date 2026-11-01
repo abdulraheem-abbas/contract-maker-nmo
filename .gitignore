@@ -72,5 +72,7 @@ model-choice.json
 *.local.*
 
 .DS_Store
+*.swp
+*.swo
 .AppleDouble
 Thumbs.db

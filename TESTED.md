@@ -2,7 +2,7 @@
 
 This separate contract-creation app was checked on the Apple M1 Mac using fictional employee details. The AI-assisted application and its repository were kept separate.
 
-- 57 automated tests passed with the private templates configured locally. They cover dates, weekdays, salary precision, identity types, leading zeros, confirmation, saved role rules, template preservation, versioned template changes, spreadsheet imports and local-only requests. Three private-template tests skip on a source-only clone.
+- 63 automated tests passed with the private templates configured locally. They cover dates, weekdays, salary precision, identity types, leading zeros, confirmation, saved role rules, template preservation, versioned template changes, spreadsheet imports and local-only requests. Three private-template tests skip on a source-only clone.
 - Manual browser entry produced Word only without uploading source documents. No PDF or JSON appears in output downloads; internal records remain local. Arabic fields used right-to-left input and English fields used left-to-right input. The calculated weekday and inclusive contract period matched the entered dates.
 - Spreadsheet browser import selected row 3 explicitly. Its leading-zero identity number was preserved and imported values remained unconfirmed. Unit checks covered CSV, ODS, XLSX, Excel date systems, ambiguous dates, cached formulas, conflicting employee names, keeping existing fields, source membership and changed source copies.
 - Imported reference images were available for viewing and did not fill any employee fields. No model engine, OCR or contract-review route is present.
@@ -12,6 +12,7 @@ This separate contract-creation app was checked on the Apple M1 Mac using fictio
 - The standalone Mac application passed the same fictional browser/import/export/template workflow. It runs without an AI model or engine and has a separate browser-session cookie.
 - The macOS outbound restriction denied an external dummy connection while allowing a loopback connection.
 - Desktop and narrow-width browser checks found no JavaScript errors, failed requests, external requests or horizontal page overflow. NMO colors were retained.
+- Startup checks covered the fixed address, reuse with missing/stale address files, rejecting a different workspace, and keeping a replacement instance’s address during shutdown. Reopening the packaged app reused the same running process.
 - Invalid origins, old application cookies and mutations during a running workspace operation were refused. Generation required field confirmation and separate acknowledgement for expired identity details.
 
 Local evidence, screenshots and fictional exports are kept under the ignored `test-results` folder. These checks demonstrate the tested behavior; they do not guarantee source-record accuracy, translation, legal interpretation or identical wrapping for every future field length. Inspect each final Word document before using it.

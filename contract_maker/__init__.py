@@ -1,2 +1,2 @@
 """NMO Contract Maker: deterministic, local contract creation."""
-__version__ = "1.1.0"
+__version__ = "1.1.1"

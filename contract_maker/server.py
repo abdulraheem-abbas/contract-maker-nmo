@@ -15,7 +15,7 @@ import threading
 import uuid
 import webbrowser
 import time
-from .config import DATA,RESOURCES,ALLOWED_EXTENSIONS,APP_NAME,initialize
+from .config import DATA,RESOURCES,ALLOWED_EXTENSIONS,APP_NAME,DEFAULT_PORT,initialize
 from .fields import FIELDS,FIELD_KEYS,empty_fields,required_fields
 from .checks import check_fields,calculations
 from .spreadsheets import read_workbook,row_import,suggested_mapping,column_index
@@ -402,7 +402,7 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             return self.respond({'error':'This action could not finish. Your originals were preserved.'},500)
 
-def serve(port=0,open_browser=True):
+def serve(port=DEFAULT_PORT,open_browser=True):
     initialize()
     install_network_guard()
     server=AppServer(('127.0.0.1',port),Handler)
@@ -413,5 +413,7 @@ def serve(port=0,open_browser=True):
     try:server.serve_forever()
     finally:
         server.server_close()
-        try:(DATA/'app-address.json').unlink()
-        except OSError:pass
+        try:
+            address=DATA/'app-address.json'
+            if json.loads(address.read_text()).get('pid')==os.getpid():address.unlink()
+        except (OSError,ValueError):pass

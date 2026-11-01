@@ -11,6 +11,7 @@ else:
     RESOURCES = ROOT
 DATA = Path(os.environ.get("NMO_CONTRACTS_DATA", str(ROOT / "data"))).resolve()
 APP_NAME = "NMO Contract Maker"
+DEFAULT_PORT = 8770
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".jpg", ".jpeg", ".png", ".ods", ".xlsx", ".csv", ".txt"}
 
 def initialize():

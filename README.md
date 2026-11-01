@@ -8,7 +8,9 @@ This is a separate application from the AI-assisted Contract-Maker project. It h
 
 ## Open the prepared Mac app
 
-Double-click **NMO Contract Maker.app** or **Start Contract Maker.command**. The interface opens at a `http://127.0.0.1:` address on this computer. Keep the app, `data` and `runtime` folders together. No AI download, internet connection or account is needed to create contracts.
+Double-click **NMO Contract Maker.app** or **Start Contract Maker.command**. The interface opens at **http://127.0.0.1:8770/** on this computer. Normal launches reuse this address and an existing instance; a stale address file does not force another port. Keep the app, `data` and `runtime` folders together. No AI download, internet connection or account is needed to create contracts.
+
+If you open `web/index.html` directly, use the shown app link after starting **NMO Contract Maker.app**. The source HTML file alone cannot run the local application.
 
 ## Create a contract
 

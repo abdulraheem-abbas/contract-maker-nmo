@@ -358,6 +358,10 @@ $('#next-page').addEventListener('click',()=>{state.page++;renderViewer();});
 $('#cancel-task').addEventListener('click',async()=>{if(state.task){await api('/api/cancel',{task:state.task});$('#task-message').textContent='Stopping after the current step; completed files stay saved.';}});
 window.addEventListener('beforeunload',event=>{if(state.task){event.preventDefault();event.returnValue='A local operation is still running.';}});
 async function init(){
+  if(location.protocol==='file:'){
+    document.body.innerHTML='<main class="local-start-help"><h1>Open Contract Maker</h1><p>Open <strong>NMO Contract Maker.app</strong> first, then use the local website below.</p><a class="button primary" href="http://127.0.0.1:8770/">Open Contract Maker →</a></main>';
+    return;
+  }
   try{await refreshBootstrap();$('#today').textContent=new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).toUpperCase();renderJobs();}
   catch(error){$('#job-list').innerHTML='<div class="empty-state"><h3>The local app is starting</h3><p>Reload this window in a moment. Your files remain on this computer.</p></div>';handleError(error);}
 }
