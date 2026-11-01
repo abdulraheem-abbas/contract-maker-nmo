@@ -96,3 +96,22 @@ html[lang=ar] footer span{letter-spacing:0}
 @media(max-width:800px){[dir=rtl] .app-shell{margin-right:72px}[dir=rtl] .brand{padding:0}html[lang=ar] .nav{font-size:0;padding:14px 8px}html[lang=ar] h1{font-size:31px}html[lang=ar] .job-heading h1{font-size:25px}html[lang=ar] .lead br{display:none}html[lang=ar] .topbar-right{gap:7px}html[lang=ar] .local-mode-badge{display:none}.language-switch{padding:6px 10px;min-width:65px}.privacy-badge{display:none}.topbar-right{justify-content:flex-end}.language-switch{margin-inline-end:auto}[dir=rtl] .toast{left:87px;right:15px}html[lang=ar] .panel-heading h2{font-size:17px}html[lang=ar] .page-heading{min-height:245px}html[lang=ar] .action-card{padding:22px 19px}html[lang=ar] .action-body strong{font-size:17px}html[lang=ar] .button{white-space:normal}html[lang=ar] .field-label{gap:8px}html[lang=ar] .field-label .confirm-label{font-size:9px}html[lang=ar] .tabs{gap:16px}html[lang=ar] .tab span{font-size:11px}html[lang=ar] footer{gap:10px;flex-wrap:wrap}.details-layout>*{min-width:0}html[lang=ar] dialog h2{font-size:23px}html[lang=ar] dialog{max-width:calc(100vw - 24px)}html[lang=ar] .sheet-table{min-width:750px}}
 
 [dir=rtl] .action-body b>span,[dir=rtl] #main-action>span,[dir=rtl] .job-row>span:last-child{display:inline-block;transform:scaleX(-1)}
+
+.tab-step{font-style:normal}
+.save-error{color:#b42318!important;font-weight:600}
+@media(max-width:800px){
+ .tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 14px;overflow:visible}
+ .tab{min-width:0;min-height:48px;padding:10px 0;text-align:start}
+ .tab-step{display:none}
+ .tab span{flex:1;min-width:0;white-space:normal;overflow-wrap:anywhere;line-height:1.7}
+ .tab b{flex-shrink:0}
+}
+
+/* The two interfaces share control dimensions and readable field labels. */
+.field-row input.field-input,.field-row select.field-input{height:46px;min-height:46px;line-height:24px;padding:10px 12px}
+.field-label>label>span{font-size:12px}
+.field-label .confirm-label{font-size:10px}
+@media(max-width:800px){
+ .output-card{display:grid;grid-template-columns:42px minmax(0,1fr);gap:14px;padding:18px}
+ .output-card>.button{grid-column:1/-1;width:100%}
+}

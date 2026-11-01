@@ -26,6 +26,8 @@ Switching languages preserves unsaved form values, confirmations, spreadsheet se
 4. Run **Field checks**. Missing or invalid fields are marked in red with a message beside the input; entered values are also checked during saving. Expiry and date warnings need a separate acknowledgement.
 5. Select **Create Word**. Inspect the Word document’s Arabic/English text, wrapping, page breaks and signature area. Previous Word revisions remain saved. Internal records are retained locally; no JSON or PDF file is shown or included in downloads.
 
+Employee form changes save automatically. The save status reports pending or failed saves in the selected language. If a save fails, the form stays open for retry; reload/close prompts while employee edits are still unsaved.
+
 Employment contracts use a job title without its project name and a reporting-manager title without their personal name. Service contracts retain the relevant project and manager details. Issuing authority uses the city only. Leading zeros are kept, and filled fields are bold in both scripts. Saved individual role instructions, when configured locally, are checked before generation.
 
 ## Identity document types

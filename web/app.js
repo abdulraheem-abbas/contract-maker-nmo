@@ -5,7 +5,7 @@ const jobLabel=job=>(job.is_untitled||(!job.archive_only&&job.fields&&!job.field
 const kindLabel=kind=>t(({employment:'Employment contract',service:'Service contract',extension:'Extension letter'})[kind]||kind);
 const $ = (selector, root=document) => root.querySelector(selector);
 const $$ = (selector, root=document) => [...root.querySelectorAll(selector)];
-const state = {boot:null,job:null,tab:'documents',view:'workspace',mode:'create',source:null,page:1,task:null,role:'offer',saving:false,template:null,templateKind:null,templateBusy:false,sheet:null,touched:new Set(),validateAll:false,archiveJob:null,archiveFile:null};
+const state = {boot:null,job:null,tab:'documents',view:'workspace',mode:'create',source:null,page:1,task:null,role:'offer',saving:false,unsaved:false,saveError:false,saveVersion:0,savePending:null,template:null,templateKind:null,templateBusy:false,sheet:null,touched:new Set(),validateAll:false,archiveJob:null,archiveFile:null};
 const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let toastTimer,saveTimer;
 
@@ -40,7 +40,9 @@ async function refreshBootstrap(){const csrf=state.boot?.csrf;state.boot=await a
 function newDialog(mode){state.mode=mode;$('#new-mode-label').textContent=mode==='spreadsheet'?t('START FROM A SPREADSHEET'):t('NEW CONTRACT');$('#new-dialog').showModal();}
 async function openJob(id){
   if(state.task)throw new Error(t('Wait for the current step to finish.'));
+  if(state.job&&(state.unsaved||state.saving))await saveJob();
   clearTimeout(saveTimer);await refreshBootstrap();state.touched=new Set();state.validateAll=false;state.job=await api('/api/job?id='+encodeURIComponent(id));state.source=state.job.sources[0]||null;state.page=1;
+  state.unsaved=false;state.saveError=false;
   renderJob();setView('job');setTab(state.job.archive_only?'outputs':'details');
 }
 function setTab(tab){
@@ -68,7 +70,7 @@ function renderJob(){
   $('#main-action').innerHTML=ui('Create Word <span>↗</span>');
   $('#main-action').classList.toggle('hidden',!!state.job.archive_only);$('#save-job').classList.toggle('hidden',!!state.job.archive_only);
   $$('.tab').forEach(tab=>tab.classList.toggle('hidden',!!state.job.archive_only&&tab.dataset.tab!=='outputs'));
-  $('#saved-status').textContent=state.job.archive_only?t('Word file saved as uploaded.'):state.job.last_word_origin==='uploaded_word'?t('Latest Word file was uploaded. These form details have not been updated from that file.'):t('Changes are saved locally.');
+  renderSaveStatus();
   renderSources();renderFields();renderFindings();renderOutputs();renderCalculations();updateCounts();
 }
 function renderSources(){
@@ -109,17 +111,35 @@ function renderFields(){
     }else input=ui`<input class="field-input" id="field-${key}" data-field="${key}" type="${type==='date'?'date':'text'}" dir="${key.endsWith('_ar')?'rtl':'ltr'}" value="${escapeHTML(field.value)}" autocomplete="off" ${key==='salary_usd'?'inputmode="decimal"':''}>`;
     const evidence=(field.evidence||[]).map((e,i)=>ui`<button class="evidence-link" data-evidence="${key}" data-index="${i}">↗ ${escapeHTML(e.source_name)} · ${t('Page {page} of {pages}',{page:e.page,pages:state.job.source_details.find(s=>s.id===e.source_id)?.pages.length||'—'})}${e.text_match===false?t(' · inspect image'):''}</button>`).join('');
     const alternatives='';
-    return ui`<div class="field-row ${field.confirmed?'confirmed':''}" data-row="${key}"><div class="field-label"><label for="field-${key}"><span>${escapeHTML(isArabic()?arabic:english)}${required.includes(key)?ui('<b class="required-star">*</b>'):''}</span><br><small lang="${isArabic()?'en':'ar'}" dir="${isArabic()?'ltr':'rtl'}">${escapeHTML(isArabic()?english:arabic)}</small></label><label class="confirm-label"><input type="checkbox" data-confirm="${key}" ${field.confirmed?'checked':''} ${!field.value?'disabled':''}>Checked</label></div>${input}<p class="field-error hidden" id="error-${key}" role="alert"></p><div class="field-evidence">${evidence}${alternatives}<span class="field-origin">${escapeHTML(message(field.note||field.origin||t('Enter or read from a source')))}</span></div></div>`;
+    return ui`<div class="field-row ${field.confirmed?'confirmed':''}" data-row="${key}"><div class="field-label"><label for="field-${key}"><span>${escapeHTML(isArabic()?arabic:english)}${required.includes(key)?ui('<b class="required-star">*</b>'):''}</span><br><small lang="${isArabic()?'en':'ar'}" dir="${isArabic()?'ltr':'rtl'}">${escapeHTML(isArabic()?english:arabic)}</small></label><label class="confirm-label"><input type="checkbox" data-confirm="${key}" ${field.confirmed?'checked':''} ${!field.value?'disabled':''}>Checked</label></div>${input}<p class="field-error hidden" id="error-${key}" role="alert"></p><div class="field-evidence">${evidence}${alternatives}<span class="field-origin">${escapeHTML(message(field.note||(field.origin==='empty'?t('Not entered yet.'):field.origin)||t('Enter or read from a source')))}</span></div></div>`;
   }).join('')}</section>`).join('');
   paintFieldErrors();
 }
 function savePayload(){return {job:state.job.id,fields:state.job.fields};}
+function renderSaveStatus(){
+  const status=$('#saved-status');
+  status.classList.toggle('save-error',state.saveError);
+  status.textContent=state.saving?t('Saving locally…'):state.saveError?t('Changes could not be saved. Keep this page open and choose Save work to retry.'):state.unsaved?t('Changes not saved yet.'):state.job?.archive_only?t('Word file saved as uploaded.'):state.job?.last_word_origin==='uploaded_word'?t('Latest Word file was uploaded. These form details have not been updated from that file.'):t('Saved on this computer');
+}
 async function saveJob(silent=true){
   if(!state.job||state.task)return;clearTimeout(saveTimer);
-  const saved=await api('/api/save',savePayload());state.job.title=saved.title;$('#job-title').textContent=jobLabel(state.job);$('#saved-status').textContent=t('Saved on this computer');state.job.calculations=saved.calculations;state.job.validation=saved.validation;paintFieldErrors();renderCalculations();
+  // Serialize writes so a slower response cannot overwrite newer edits.
+  while(state.savePending)await state.savePending;
+  const job=state.job,version=state.saveVersion;
+  state.saving=true;state.saveError=false;renderSaveStatus();
+  state.savePending=api('/api/save',savePayload());
+  try{
+    const saved=await state.savePending;
+    if(state.job===job){
+      state.unsaved=state.saveVersion!==version;
+      if(!state.unsaved){state.job.title=saved.title;$('#job-title').textContent=jobLabel(state.job);state.job.calculations=saved.calculations;state.job.validation=saved.validation;paintFieldErrors();renderCalculations();}
+    }
+  }catch(error){if(state.job===job){state.unsaved=true;state.saveError=true;}throw error;}
+  finally{state.savePending=null;state.saving=false;renderSaveStatus();}
+  if(state.job===job&&state.unsaved)return saveJob(silent);
   if(!silent)toast(t('Your work is saved locally.'));
 }
-function queueSave(){if(state.task)return;clearTimeout(saveTimer);$('#saved-status').textContent=t('Saving locally…');saveTimer=setTimeout(()=>saveJob().catch(handleError),800);}
+function queueSave(){if(state.task)return;state.unsaved=true;state.saveVersion++;state.saveError=false;clearTimeout(saveTimer);renderSaveStatus();saveTimer=setTimeout(()=>saveJob().catch(handleError),800);}
 async function importFile(file,role){
   if(state.task)throw new Error(t('Wait for the current task to finish first.'));
   if(file.size>25*1024*1024)throw new Error(t('Choose a file up to 25 MB.'));
@@ -174,10 +194,11 @@ function renderOutputs(){
 }
 
 async function checkFields(){
+  await saveJob();
   const result=await api('/api/check',savePayload());state.job.findings=result.findings;state.job.validation=result.findings;state.validateAll=true;paintFieldErrors();state.job.checked_at=result.checked_at;state.job.calculations=result.calculations;renderCalculations();renderFindings();updateCounts();setTab('findings');return result.findings;
 }
 async function mainAction(acknowledge=false){
-  clearTimeout(saveTimer);
+  await saveJob();
   const issues=await api('/api/check',savePayload());const errors=issues.findings.filter(f=>f.level==='error');
   if(errors.length){state.job.findings=issues.findings;state.job.validation=issues.findings;state.validateAll=true;renderFields();renderFindings();updateCounts();setTab('details');focusFirstError();throw new Error(t('Complete the missing or invalid fields first.'));}
   const unconfirmed=Object.keys(state.job.fields).filter(k=>visibleField(k)&&state.job.fields[k].value&&!state.job.fields[k].confirmed);
@@ -312,7 +333,7 @@ function renderSheetMappings(){
 function handleError(error){if(error.findings&&state.job){state.job.findings=error.findings;state.job.validation=error.findings;state.validateAll=true;paintFieldErrors();renderFindings();updateCounts();}if($('#identity-dialog').open)$('#identity-type-error').textContent=message(error.message);if($('#archive-dialog').open)$('#archive-error').textContent=message(error.message);if($('#sheet-dialog').open&&$('#sheet-message'))$('#sheet-message').textContent=message(error.message);toast(error.message||t('The action could not finish.'),true);}
 
 document.addEventListener('click',async event=>{
-  const nav=event.target.closest('[data-nav]');if(nav){if(state.task){toast(t('Wait for the current step to finish.'));return;}if(state.job)await saveJob().catch(handleError);await refreshBootstrap().catch(handleError);setView(nav.dataset.nav);}
+  const nav=event.target.closest('[data-nav]');if(nav){if(state.task){toast(t('Wait for the current step to finish.'));return;}try{if(state.job)await saveJob();await refreshBootstrap();setView(nav.dataset.nav);}catch(error){handleError(error);return;}}
   if(nav)closeToolMenus();
   const start=event.target.closest('[data-new]');if(start){if(state.task){toast(t('Wait for the current step to finish.'));return;}newDialog(start.dataset.new);}
   const tab=event.target.closest('[data-tab]');if(tab&&state.job)setTab(tab.dataset.tab);
@@ -350,7 +371,7 @@ $('#archive-form').addEventListener('submit',async event=>{event.preventDefault(
 $('#identity-form').addEventListener('submit',async event=>{event.preventDefault();const button=$('#identity-form button[type=submit]');button.disabled=true;try{const result=await api('/api/identity-type',{ar:$('#identity-label-ar').value,en:$('#identity-label-en').value,verb_ar:$('#identity-verb').value,article_en:$('#identity-article').value});state.boot.identity_types=result.identity_types;state.job.fields.identity_type={value:result.identity_type.id,confirmed:false,evidence:[],origin:'chosen by you'};state.touched.add('identity_type');state.job.findings=[];delete state.job.checked_at;renderFields();updateCounts();queueSave();$('#identity-dialog').close();toast(t('Document type saved. It is available for future contracts.'));}catch(error){handleError(error);}finally{button.disabled=false;}});
 $('#template-picker').addEventListener('change',event=>{const file=event.target.files[0];event.target.value='';if(file)importTemplate(file,state.templateKind).catch(handleError);});
 $('#save-job').addEventListener('click',()=>saveJob(false).catch(handleError));
-$('#back-workspace').addEventListener('click',async()=>{if(state.task){toast(t('Wait for the current step to finish.'));return;}await saveJob().catch(handleError);await refreshBootstrap();setView('workspace');});
+$('#back-workspace').addEventListener('click',async()=>{if(state.task){toast(t('Wait for the current step to finish.'));return;}try{await saveJob();await refreshBootstrap();setView('workspace');}catch(error){handleError(error);}});
 $('#main-action').addEventListener('click',()=>mainAction().catch(handleError));
 $('#create-confirmed').addEventListener('click',()=>{$('#warning-dialog').close();mainAction(true).catch(handleError);});
 $('#acknowledge-warnings').addEventListener('change',event=>$('#create-confirmed').disabled=!event.target.checked);
@@ -361,7 +382,7 @@ $('#viewer-source').addEventListener('change',event=>{state.source=event.target.
 $('#prev-page').addEventListener('click',()=>{state.page--;renderViewer();});
 $('#next-page').addEventListener('click',()=>{state.page++;renderViewer();});
 $('#cancel-task').addEventListener('click',async()=>{if(state.task){await api('/api/cancel',{task:state.task});$('#task-message').textContent=t('Stopping after the current step; completed files stay saved.');}});
-window.addEventListener('beforeunload',event=>{if(state.task){event.preventDefault();event.returnValue='A local operation is still running.';}});
+window.addEventListener('beforeunload',event=>{if(state.task||state.unsaved||state.saving){event.preventDefault();event.returnValue='';}});
 function refreshLanguage(){
   NMOI18n.applyStatic();
   const button=$('#language-switch');button.textContent=isArabic()?'English':'عربي';button.lang=isArabic()?'en':'ar';button.setAttribute('aria-label',isArabic()?'Switch to English':'التبديل إلى العربية');

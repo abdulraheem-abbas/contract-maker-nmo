@@ -468,6 +468,13 @@ Unsupported file type.|نوع الملف غير مدعوم.
 Word text; page numbers unavailable until PDF rendering succeeds.|نص Word؛ تتوفر أرقام الصفحات بعد نجاح المعاينة المحلية.
 LibreOffice is needed for PDF export. The Word file is still available.|يلزم LibreOffice للمعاينة. ملف Word ما زال متاحًا.
 PDF export did not complete. The Word file was preserved.|لم تكتمل المعاينة. حُفظ ملف Word.
+Not entered yet.|بانتظار الإدخال.
+Changes not saved yet.|تغييرات بانتظار الحفظ.
+Changes could not be saved. Keep this page open and choose Save work to retry.|تعذّر حفظ التغييرات. أبقِ الصفحة مفتوحة واختر «حفظ العمل» للمحاولة مجددًا.
+Failed to fetch|تعذّر الاتصال بالتطبيق المحلي. تأكّد من أنه يعمل ثم حاول مجددًا.
+Load failed|تعذّر الاتصال بالتطبيق المحلي. تأكّد من أنه يعمل ثم حاول مجددًا.
+This workspace was not found.|لم يُعثر على مساحة العمل هذه.
+Source not found.|لم يُعثر على المستند المرجعي.
 `.trim().split('\n').map(line=>line.split('|'));
  const ar=Object.fromEntries(entries);
  const locale=()=>language==='ar'?'ar-YE-u-nu-latn':'en-GB';
@@ -487,6 +494,7 @@ PDF export did not complete. The Word file was preserved.|لم تكتمل الم
   if(ar[text.trim()]!==undefined)return t(text);
   let match;
   const patterns=[
+   [/^The date in (.+) is ambiguous or invalid\. Enter it manually as YYYY-MM-DD\.$/,m=>`التاريخ في العمود ${m[1]} غير واضح أو غير صالح. أدخله يدويًا بصيغة YYYY-MM-DD.`],
    [/^(.+) is required by this template\.$/,m=>`هذا القالب يتطلب ${t(m[1])}.`],
    [/^The formula in (.+) has no saved value\. Enter this field manually\.$/,m=>`لا توجد نتيجة محفوظة لمعادلة العمود ${m[1]}. أدخل الحقل يدويًا.`],
    [/^Cell (.+) contains a spreadsheet error\. Enter this field manually\.$/,m=>`تحتوي الخلية في العمود ${m[1]} على خطأ في الجدول. أدخل الحقل يدويًا.`],
