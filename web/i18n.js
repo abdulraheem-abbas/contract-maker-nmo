@@ -519,7 +519,7 @@ Apply tags|تطبيق الوسوم
 Delete this tag?|حذف هذا الوسم؟
 The tag will be removed from your contracts. Contract files and versions stay saved.|سيُزال الوسم من عقودك. تبقى ملفات العقود ونسخها محفوظة.
 Delete tag|حذف الوسم
-Double-click to open version history|انقر مرتين لفتح سجل النسخ
+Click to open version history|انقر لفتح سجل النسخ
 Created: {date}|تاريخ الإنشاء: {date}
 Edited: {date}|آخر تعديل: {date}
 Creation time unavailable|وقت الإنشاء غير متاح

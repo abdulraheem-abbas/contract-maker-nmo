@@ -36,7 +36,7 @@ The document selector includes ID cards, national-number IDs, passports, refugee
 
 ## Completed contracts and version history
 
-Double-click a saved contract’s name or icon, or choose **Versions**, to open its history. Each version shows its creation date/time and offers download, edit, duplicate and delete. Deleted versions go to local Trash and can be restored, including when every version for a person was deleted.
+Click a saved contract’s name or icon, or choose **Versions**, to open its history. Each version shows its creation date/time and offers download, edit, duplicate and delete. Deleted versions go to local Trash and can be restored, including when every version for a person was deleted.
 
 Choose any historical version to duplicate. **Inside this person’s history** makes a renewal copy under that person. **Separate editable copy** creates an independent entry for another employee. Only the selected Word version and its saved details are copied; other versions are not copied. Review identity details and confirm the copied fields before generating. A separate copy initially inherits the source tags.
 
